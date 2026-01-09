@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from news_sentiment_module import NewsSentimentAnalyzer
 from intraday_dashboard import create_intraday_dashboard
 from daily_dashboard import create_daily_pnl_dashboard
