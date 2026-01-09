@@ -617,39 +617,40 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         st.markdown(table_html, unsafe_allow_html=True)
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
-    """Create IMPROVED daily P&L chart with smooth line - MATCHING INTRA STYLE"""
+    """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
     if daily_pnl_df.empty:
         return None
     
     # Sort by date
     daily_pnl_df_sorted = daily_pnl_df.sort_values('Date', ascending=True).copy()
     
-    # Ensure we have required column
-    if 'Cumulative Net P&L' not in daily_pnl_df_sorted.columns:
-        # Calculate cumulative if not present
-        daily_pnl_df_sorted['Cumulative Net P&L'] = daily_pnl_df_sorted['Net P&L'].cumsum()
+    # Ensure we have required columns
+    if 'Capital' not in daily_pnl_df_sorted.columns:
+        st.warning("Missing 'Capital' column in daily P&L data")
+        return None
     
     # Create date strings for display
     daily_pnl_df_sorted['Date_Str'] = daily_pnl_df_sorted['Date'].dt.strftime('%Y-%m-%d')
     
-    # Calculate key metrics
-    highest_value = daily_pnl_df_sorted['Cumulative Net P&L'].max()
-    lowest_value = daily_pnl_df_sorted['Cumulative Net P&L'].min()
+    # Calculate key metrics for Capital
+    highest_capital = daily_pnl_df_sorted['Capital'].max()
+    lowest_capital = daily_pnl_df_sorted['Capital'].min()
     
-    # Find rows with extremes
-    highest_row = daily_pnl_df_sorted[daily_pnl_df_sorted['Cumulative Net P&L'] == highest_value].iloc[0]
-    lowest_row = daily_pnl_df_sorted[daily_pnl_df_sorted['Cumulative Net P&L'] == lowest_value].iloc[0]
+    # Find rows with extremes for Capital
+    highest_capital_row = daily_pnl_df_sorted[daily_pnl_df_sorted['Capital'] == highest_capital].iloc[0]
+    lowest_capital_row = daily_pnl_df_sorted[daily_pnl_df_sorted['Capital'] == lowest_capital].iloc[0]
     
     fig = go.Figure()
     
-    # Create color segments for cumulative line (like intraday chart)
+    # Create color segments for Capital line (like intraday chart)
     segments = []
     current_segment = {'x': [], 'y': [], 'color': None}
     
     for i in range(len(daily_pnl_df_sorted)):
-        current_val = daily_pnl_df_sorted['Cumulative Net P&L'].iloc[i]
+        current_val = daily_pnl_df_sorted['Capital'].iloc[i]
         current_date = daily_pnl_df_sorted['Date_Str'].iloc[i]
-        current_color = '#10B981' if current_val >= 0 else '#EF4444'
+        # Capital line color - always orange as per original
+        current_color = '#FFA500'
         
         if not current_segment['x']:
             current_segment['x'].append(current_date)
@@ -659,16 +660,15 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             current_segment['x'].append(current_date)
             current_segment['y'].append(current_val)
         else:
-            # Find zero crossing point
-            prev_val = daily_pnl_df_sorted['Cumulative Net P&L'].iloc[i-1]
+            # If color changes (though it shouldn't for Capital)
+            prev_val = daily_pnl_df_sorted['Capital'].iloc[i-1]
             prev_date = daily_pnl_df_sorted['Date_Str'].iloc[i-1]
             
-            # For categorical x-axis, we can't interpolate time, so just add the transition point
-            current_segment['x'].append(prev_date)  # End previous segment at previous date
+            current_segment['x'].append(prev_date)
             current_segment['y'].append(prev_val)
             segments.append(current_segment.copy())
             current_segment = {
-                'x': [prev_date, current_date],  # Start new segment from previous date
+                'x': [prev_date, current_date],
                 'y': [prev_val, current_val],
                 'color': current_color
             }
@@ -676,7 +676,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     if current_segment['x']:
         segments.append(current_segment)
     
-    # Add colored segments
+    # Add colored segments for Capital line
     for segment in segments:
         fig.add_trace(go.Scatter(
             x=segment['x'],
@@ -684,72 +684,19 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             mode='lines',
             line=dict(shape='spline', smoothing=0.8, width=4, color=segment['color']),
             showlegend=False,
-            hoverinfo='skip'
+            hoverinfo='skip',
+            name='Capital'
         ))
     
-    # Add invisible trace for hover on cumulative line
+    # Add invisible trace for hover on Capital line
     fig.add_trace(go.Scatter(
         x=daily_pnl_df_sorted['Date_Str'],
-        y=daily_pnl_df_sorted['Cumulative Net P&L'],
+        y=daily_pnl_df_sorted['Capital'],
         mode='lines',
         line=dict(width=0),
-        hovertemplate=f'<b>%{{x}}</b><br>Cumulative P&L: {currency_symbol}%{{y:,.2f}}<extra></extra>',
-        showlegend=False,
-        name='Cumulative P&L'
-    ))
-    
-    # Add zero line
-    fig.add_hline(y=0, line_dash="dash", line_color="#94A3B8", line_width=1, opacity=0.3)
-    
-    # Add area fill for cumulative line
-    x_full = daily_pnl_df_sorted['Date_Str'].tolist()
-    y_full = daily_pnl_df_sorted['Cumulative Net P&L'].tolist()
-    
-    fig.add_trace(go.Scatter(
-        x=x_full,
-        y=y_full,
-        mode='none',
-        fill='tozeroy',
-        fillcolor='rgba(16, 185, 129, 0.1)',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=x_full,
-        y=[min(y, 0) for y in y_full],
-        mode='none',
-        fill='tozeroy',
-        fillcolor='rgba(239, 68, 68, 0.1)',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # Add extreme points for cumulative line
-    fig.add_trace(go.Scatter(
-        x=[highest_row['Date_Str']],
-        y=[highest_value],
-        mode='markers+text',
-        marker=dict(size=12, color='#10B981', symbol='triangle-up', line=dict(width=2, color='white')),
-        text=[f"  High: {currency_symbol}{highest_value:,.0f}"],
-        textposition="top center",
-        textfont=dict(size=11, color='#10B981', family='Arial'),
-        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Date: %{{x}}<extra></extra>',
-        showlegend=False,
-        name='Highest'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=[lowest_row['Date_Str']],
-        y=[lowest_value],
-        mode='markers+text',
-        marker=dict(size=12, color='#EF4444', symbol='triangle-down', line=dict(width=2, color='white')),
-        text=[f"  Low: {currency_symbol}{lowest_value:,.0f}"],
-        textposition="bottom center",
-        textfont=dict(size=11, color='#EF4444', family='Arial'),
-        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Date: %{{x}}<extra></extra>',
-        showlegend=False,
-        name='Lowest'
+        hovertemplate=f'<b>%{{x}}</b><br>Capital: {currency_symbol}%{{y:,.2f}}<extra></extra>',
+        showlegend=True,
+        name='Capital'
     ))
     
     # Add Daily P&L bars (right Y-axis)
@@ -762,6 +709,33 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
         opacity=0.7,
         hovertemplate=f'<b>%{{x}}</b><br>Daily P&L: {currency_symbol}%{{y:,.2f}}<extra></extra>',
         yaxis='y2'
+    ))
+    
+    # Add extreme points for Capital line
+    fig.add_trace(go.Scatter(
+        x=[highest_capital_row['Date_Str']],
+        y=[highest_capital],
+        mode='markers+text',
+        marker=dict(size=12, color='#FFA500', symbol='triangle-up', line=dict(width=2, color='white')),
+        text=[f"  High: {currency_symbol}{highest_capital:,.0f}"],
+        textposition="top center",
+        textfont=dict(size=11, color='#FFA500', family='Arial'),
+        hovertemplate=f'<b>Highest Capital: {currency_symbol}{highest_capital:,.2f}</b><br>Date: %{{x}}<extra></extra>',
+        showlegend=False,
+        name='Highest Capital'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=[lowest_capital_row['Date_Str']],
+        y=[lowest_capital],
+        mode='markers+text',
+        marker=dict(size=12, color='#FFA500', symbol='triangle-down', line=dict(width=2, color='white')),
+        text=[f"  Low: {currency_symbol}{lowest_capital:,.0f}"],
+        textposition="bottom center",
+        textfont=dict(size=11, color='#FFA500', family='Arial'),
+        hovertemplate=f'<b>Lowest Capital: {currency_symbol}{lowest_capital:,.2f}</b><br>Date: %{{x}}<extra></extra>',
+        showlegend=False,
+        name='Lowest Capital'
     ))
     
     # Update layout
@@ -796,7 +770,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             ticktext=daily_pnl_df_sorted['Date_Str'].tolist()
         ),
         yaxis=dict(
-            title=f"Cumulative P&L ({currency_symbol})",
+            title=f"Capital ({currency_symbol})",
             side="left",
             showgrid=True,
             gridcolor='#F1F5F9',
@@ -854,19 +828,21 @@ def create_daily_pnl_dashboard(daily_pnl_df, region="INDIA"):
         st.markdown(create_metric_card("Total Net P&L", format_currency_func(total_net), net_color), unsafe_allow_html=True)
     
     with col4:
-        if not daily_pnl_sorted.empty:
-            current_cumulative = daily_pnl_sorted['Cumulative Net P&L'].iloc[-1]
-            cumulative_color = "#10B981" if current_cumulative >= 0 else "#EF4444"
-            st.markdown(create_metric_card("Cumulative P&L", format_currency_func(current_cumulative), cumulative_color), unsafe_allow_html=True)
+        if not daily_pnl_sorted.empty and 'Capital' in daily_pnl_sorted.columns:
+            current_capital = daily_pnl_sorted['Capital'].iloc[-1]
+            st.markdown(create_metric_card("Current Capital", format_currency_func(current_capital), "#FFA500"), unsafe_allow_html=True)
         else:
-            st.markdown(create_metric_card("Cumulative P&L", "N/A", "#FFA500"), unsafe_allow_html=True)
+            st.markdown(create_metric_card("Current Capital", "N/A", "#FFA500"), unsafe_allow_html=True)
     
     st.divider()
     
     # Display daily P&L chart
-    fig = create_daily_pnl_chart(daily_pnl_df, currency_symbol)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
+    if 'Capital' in daily_pnl_df.columns:
+        fig = create_daily_pnl_chart(daily_pnl_df, currency_symbol)
+        if fig:
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No 'Capital' column found in the data. Cannot display chart.")
 
 # ===================================================================
 # 🎨 CSS for Bigger Tabs - UPDATED FOR 5 TABS
