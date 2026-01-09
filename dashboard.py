@@ -939,6 +939,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def create_refresh_button(key_suffix):
+    """Create a refresh button that clears cache"""
+    if st.button("🔄 Refresh Data", type="secondary", key=f"refresh_{key_suffix}"):
+        st.cache_data.clear()
+        st.rerun()
+
 # ===================================================================
 # 📥 Load Data (Keep all your existing data loading)
 # ===================================================================
