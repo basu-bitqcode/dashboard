@@ -19,7 +19,6 @@ class NewsSentimentAnalyzer:
         """
         self.google_sheet_url = google_sheet_url
         self.df = None
-        self.latest_available_date = None
         
         # Financial keywords for sentiment boosting
         self.positive_keywords = [
@@ -109,80 +108,69 @@ class NewsSentimentAnalyzer:
         return dt_us
 
     
-        def load_news_data(self):
-            """Load news data from Google Sheet using latest available date"""
-            try:
-                if self.google_sheet_url:
-                    # For public Google Sheets
-                    if '/edit#' in self.google_sheet_url:
-                        # Extract sheet ID
-                        if 'gid=' in self.google_sheet_url:
-                            sheet_id = self.google_sheet_url.split('gid=')[1]
-                            csv_url = self.google_sheet_url.replace('/edit#gid=', f'/export?format=csv&gid={sheet_id}')
-                        else:
-                            csv_url = self.google_sheet_url.replace('/edit#', '/export?format=csv&gid=0')
+    def load_news_data(self):
+        """Load news data from Google Sheet"""
+        try:
+            if self.google_sheet_url:
+                # For public Google Sheets
+                if '/edit#' in self.google_sheet_url:
+                    # Extract sheet ID
+                    if 'gid=' in self.google_sheet_url:
+                        sheet_id = self.google_sheet_url.split('gid=')[1]
+                        csv_url = self.google_sheet_url.replace('/edit#gid=', f'/export?format=csv&gid={sheet_id}')
                     else:
-                        # Assume it's already a CSV export URL
-                        csv_url = self.google_sheet_url
-                    
-                    # Make sure it's a CSV export URL
-                    if 'export?format=csv' not in csv_url:
-                        if '/edit?' in csv_url:
-                            csv_url = csv_url.replace('/edit?', '/export?format=csv&')
-                        else:
-                            csv_url = f"{csv_url}/export?format=csv"
-                    
-                    self.df = pd.read_csv(csv_url)
-                    
-                    if self.df is not None and not self.df.empty:
-                        # Clean column names
-                        self.df.columns = [col.strip() for col in self.df.columns]
-                        
-                        # Clean news text
-                        if 'News' in self.df.columns:
-                            self.df['Cleaned_News'] = self.df['News'].apply(self.clean_text)
-                            # Remove empty news
-                            self.df = self.df[self.df['Cleaned_News'].str.strip() != '']
-                        
-                        # Parse datetime
-                        if 'DateTime' in self.df.columns:
-                            self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
-                            
-                            # Filter out rows where DateTime_ET is None (parse failed)
-                            self.df = self.df[self.df['DateTime_ET'].notna()]
-                            
-                            if not self.df.empty:
-                                # Extract date from datetime
-                                self.df['Date'] = self.df['DateTime_ET'].apply(
-                                    lambda x: x.date() if x is not None and pd.notna(x) else None
-                                )
-                                
-                                # Filter out rows where Date is None
-                                self.df = self.df[self.df['Date'].notna()]
-                                
-                                if not self.df.empty:
-                                    # Get the latest date from the data
-                                    self.latest_available_date = self.df['Date'].max()
-                                    
-                                    # Filter for the latest available date
-                                    self.df = self.df[self.df['Date'] == self.latest_available_date]
-                                    
-                                    if len(self.df) == 0:
-                                        # If no data for latest date, use the most recent available data
-                                        self.df = self.df.sort_values('DateTime_ET', ascending=False).head(20)
-                                        if len(self.df) > 0:
-                                            # Extract the date from the first row
-                                            self.latest_available_date = self.df.iloc[0]['Date']
-                                    
-                                    # Sort by datetime (newest first)
-                                    self.df = self.df.sort_values('DateTime_ET', ascending=False)
-                        
-                        return True
-                return False
+                        csv_url = self.google_sheet_url.replace('/edit#', '/export?format=csv&gid=0')
+                else:
+                    # Assume it's already a CSV export URL
+                    csv_url = self.google_sheet_url
                 
-            except Exception as e:
-                st.error(f"Error loading news data: {str(e)}")
-                return False
+                # Make sure it's a CSV export URL
+                if 'export?format=csv' not in csv_url:
+                    if '/edit?' in csv_url:
+                        csv_url = csv_url.replace('/edit?', '/export?format=csv&')
+                    else:
+                        csv_url = f"{csv_url}/export?format=csv"
+                
+                self.df = pd.read_csv(csv_url)
+                
+                if self.df is not None and not self.df.empty:
+                    # Clean column names
+                    self.df.columns = [col.strip() for col in self.df.columns]
+                    
+                    # Clean news text
+                    if 'News' in self.df.columns:
+                        self.df['Cleaned_News'] = self.df['News'].apply(self.clean_text)
+                        # Remove empty news
+                        self.df = self.df[self.df['Cleaned_News'].str.strip() != '']
+                    
+                    # Parse datetime
+                    if 'DateTime' in self.df.columns:
+                        self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
+                        
+                        # Filter for today's news only
+                        us_now = datetime.now(ZoneInfo("America/New_York"))
+                        today = us_now.date()
+
+                        # today = datetime.now(timezone.utc).date()
+                        self.df['Date'] = pd.to_datetime(self.df['DateTime_ET']).dt.date
+                        
+                        # Check if we have today's news
+                        if today in self.df['Date'].unique():
+                            self.df = self.df[self.df['Date'] == today]
+                        else:
+                            # Show most recent date's news
+                            most_recent_date = self.df['Date'].max()
+                            self.df = self.df[self.df['Date'] == most_recent_date]
+                        
+                        # Sort by datetime (newest first)
+                        self.df = self.df.sort_values('DateTime_ET', ascending=False)
+                    
+                    return True
+            return False
+            
+        except Exception as e:
+            st.error(f"Error loading news data: {str(e)}")
+            return False
     
     def analyze_sentiment(self, text):
         """Analyze sentiment using TextBlob with financial keyword boosting"""
@@ -239,137 +227,103 @@ class NewsSentimentAnalyzer:
     
     def create_speedometer(self, sentiment_score, sentiment_label):
         """
-        Enhanced professional sentiment speedometer with better styling
+        Clean, professional sentiment speedometer
+        Fixes:
+        - Hidden labels
+        - Ugly center text
+        - Wrong neutral color
         """
     
-        # Define colors based on sentiment
+        # ---------- STRICT COLOR LOGIC ----------
         if sentiment_label == "Positive":
-            main_color = "#10B981"   # Emerald Green
-            gauge_colors = ["#059669", "#10B981", "#34D399"]  # Green gradient
+            main_color = "#2563EB"   # Blue
         elif sentiment_label == "Negative":
-            main_color = "#EF4444"   # Red
-            gauge_colors = ["#DC2626", "#EF4444", "#F87171"]  # Red gradient
+            main_color = "#DC2626"   # Red
         else:
-            main_color = "#F59E0B"   # Amber
-            gauge_colors = ["#D97706", "#F59E0B", "#FBBF24"]  # Amber gradient
+            main_color = "#9CA3AF"   # Gray (Neutral)
     
-        # Create gauge figure
         fig = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
+            mode="gauge+number",
             value=sentiment_score,
             number={
                 "font": {
-                    "size": 72,  # Larger font for better visibility
+                    "size": 52,
                     "color": main_color,
-                    "family": "Inter, Arial, sans-serif",
-                    "weight": "bold"
+                    "family": "Inter, Arial"
                 },
-                "suffix": "%",
-                "prefix": "",
-            },
-            delta={
-                "reference": 50,
-                "position": "bottom",
-                "font": {"size": 20, "family": "Inter, Arial"},
-                "increasing": {"symbol": "▲", "color": "#10B981"},
-                "decreasing": {"symbol": "▼", "color": "#EF4444"},
+                "suffix": "%"
             },
             gauge={
                 "axis": {
                     "range": [0, 100],
                     "tickmode": "array",
-                    "tickvals": [0, 20, 40, 60, 80, 100],
+                    "tickvals": [0, 25, 50, 75, 100],
                     "ticktext": [
-                        "Extreme<br>Bearish",
+                        "Very Bearish",
                         "Bearish",
                         "Neutral",
                         "Bullish",
-                        "Extreme<br>Bullish",
-                        ""
+                        "Very Bullish"
                     ],
                     "tickfont": {
-                        "size": 14,
-                        "color": "#475569",
-                        "family": "Inter, Arial"
-                    },
-                    "tickangle": 0,
-                    "tickwidth": 2,
-                    "tickcolor": "#CBD5E1"
+                        "size": 12,
+                        "color": "#475569"
+                    }
                 },
                 "bar": {
                     "color": main_color,
-                    "thickness": 0.5,
-                    "line": {"color": "#1E293B", "width": 1}
+                    "thickness": 0.32
                 },
-                "bgcolor": "rgba(255, 255, 255, 0.8)",
-                "borderwidth": 2,
-                "bordercolor": "#E2E8F0",
+                "bgcolor": "white",
+                "borderwidth": 0,
                 "steps": [
-                    {"range": [0, 40], "color": "rgba(239, 68, 68, 0.15)"},
-                    {"range": [40, 60], "color": "rgba(245, 158, 11, 0.15)"},
-                    {"range": [60, 100], "color": "rgba(16, 185, 129, 0.15)"}
+                    {"range": [0, 40], "color": "#FEE2E2"},   # Light Red
+                    {"range": [40, 60], "color": "#E5E7EB"}, # Neutral Gray
+                    {"range": [60, 100], "color": "#DBEAFE"} # Light Blue
                 ],
-                "threshold": {
-                    "line": {"color": main_color, "width": 4},
-                    "thickness": 0.75,
-                    "value": sentiment_score
-                },
-                "shape": "angular"
             }
         ))
     
-        # Add sentiment label with better styling
+        # ---------- SENTIMENT LABEL (CLEAN & SEPARATE) ----------
         fig.add_annotation(
             x=0.5,
-            y=0.25,
-            text=f"<span style='font-size:32px; font-weight:bold; color:{main_color};'>{sentiment_label.upper()}</span>",
+            y=0.22,
+            text=f"<b>{sentiment_label.upper()}</b>",
             showarrow=False,
             font=dict(
-                size=24,
-                family="Inter, Arial, sans-serif"
+                size=18,
+                color=main_color,
+                family="Inter, Arial"
             ),
             xref="paper",
             yref="paper"
         )
     
-        # Add date information if available
-        if hasattr(self, 'latest_available_date') and self.latest_available_date:
-            date_str = self.latest_available_date.strftime("%Y-%m-%d")
-            fig.add_annotation(
-                x=0.5,
-                y=-0.1,
-                text=f"<span style='font-size:14px; color:#64748B;'>Latest Data: {date_str}</span>",
-                showarrow=False,
-                font=dict(
-                    size=12,
-                    family="Inter, Arial"
-                ),
-                xref="paper",
-                yref="paper"
-            )
+        # ---------- TITLE ----------
+        fig.add_annotation(
+            x=0.5,
+            y=1.12,
+            text="<b>MARKET SENTIMENT</b>",
+            showarrow=False,
+            font=dict(
+                size=20,
+                color="#0F172A",
+                family="Inter, Arial"
+            ),
+            xref="paper",
+            yref="paper"
+        )
     
-        # Enhanced layout
+        # ---------- LAYOUT FIX (NO CLIPPING) ----------
         fig.update_layout(
-            height=480,
-            margin=dict(l=40, r=40, t=120, b=80),
+            height=420,
+            margin=dict(l=50, r=50, t=90, b=50),
             paper_bgcolor="white",
-            plot_bgcolor="white",
-            font=dict(family="Inter, Arial, sans-serif"),
-            title={
-                "text": "<b>🎯 MARKET SENTIMENT GAUGE</b>",
-                "y": 0.95,
-                "x": 0.5,
-                "xanchor": "center",
-                "yanchor": "top",
-                "font": {
-                    "size": 28,
-                    "color": "#0F172A",
-                    "family": "Inter, Arial, sans-serif"
-                }
-            }
+            plot_bgcolor="white"
         )
     
         return fig
+
 
     
     def calculate_overall_sentiment(self):
@@ -413,12 +367,12 @@ class NewsSentimentAnalyzer:
         return {'score': 50, 'sentiment': 'Neutral', 'color': '#F59E0B', 'indicator': '●'}
     
     def display_dashboard(self):
-        """Display the enhanced news sentiment dashboard"""
+        """Display the complete news sentiment dashboard"""
         # Load data
         with st.spinner("📥 Loading news data..."):
             if self.load_news_data():
-                if self.df is None or self.df.empty:
-                    st.info("📭 No news available.")
+                if self.df is None and self.df.empty:
+                    st.info("📭 No news available for today.")
                     return
             else:
                 st.error("❌ Failed to load news data")
@@ -427,50 +381,31 @@ class NewsSentimentAnalyzer:
         # Calculate overall sentiment
         overall_sentiment = self.calculate_overall_sentiment()
         
-        # Dashboard header with date info
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin-bottom: 20px;
-                    color: white;">
-            <h1 style="margin: 0; font-size: 28px;">📰 Market News Sentiment Dashboard</h1>
-            <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">
-                Latest Available Date: {self.latest_available_date.strftime('%B %d, %Y') if self.latest_available_date else 'N/A'} 
-                | Total News: {len(self.df)}
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         # Create two columns layout
         col1, col2 = st.columns([1, 2])
         
         with col1:
-            # Speedometer section with better styling
-            st.markdown("""
-            <div style="background: white; padding: 20px; border-radius: 10px; 
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                        margin-bottom: 20px;">
-                <h3 style="margin: 0 0 15px 0; color: #1E293B;">📊 Sentiment Analysis</h3>
-            </div>
-            """, unsafe_allow_html=True)
+            # Speedometer section
+            st.subheader("📊 Market Sentiment Indicator")
             
-            # Display enhanced speedometer
+            # Display speedometer
+            # fig = self.create_speedometer(
+            #     overall_sentiment['score'],
+            #     overall_sentiment['sentiment'],
+            #     overall_sentiment['color']
+            # )
+
             fig = self.create_speedometer(
                 overall_sentiment['score'],
                 overall_sentiment['sentiment']
             )
+
             
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(fig, use_container_width=True)
             
-            # Sentiment statistics with better styling
-            st.markdown("""
-            <div style="background: white; padding: 20px; border-radius: 10px; 
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                        margin-top: 20px;">
-                <h4 style="margin: 0 0 15px 0; color: #1E293B;">📈 Sentiment Breakdown</h4>
-            </div>
-            """, unsafe_allow_html=True)
+            # Sentiment statistics
+            st.markdown("---")
+            st.subheader("📈 Sentiment Breakdown")
             
             if not self.df.empty:
                 # Calculate sentiment distribution
@@ -483,70 +418,48 @@ class NewsSentimentAnalyzer:
                 if sentiments:
                     sentiment_counts = pd.Series(sentiments).value_counts()
                     
-                    # Display sentiment counts with better styling
+                    # Display sentiment counts with colors
                     sentiment_data = []
-                    for sentiment_type, bg_color, icon, text_color in [
-                        ('Positive', 'rgba(16, 185, 129, 0.15)', '📈', '#10B981'),
-                        ('Neutral', 'rgba(245, 158, 11, 0.15)', '📊', '#F59E0B'),
-                        ('Negative', 'rgba(239, 68, 68, 0.15)', '📉', '#EF4444')
+                    for sentiment_type, bg_color, icon in [
+                        ('Positive', 'rgba(16, 185, 129, 0.1)', '🟢'),
+                        ('Neutral', 'rgba(245, 158, 11, 0.1)', '🟡'),
+                        ('Negative', 'rgba(239, 68, 68, 0.1)', '🔴')
                     ]:
                         count = sentiment_counts.get(sentiment_type, 0)
                         percentage = (count / len(sentiments)) * 100 if len(sentiments) > 0 else 0
                         
+                        text_color = "#10B981" if sentiment_type == "Positive" else "#EF4444" if sentiment_type == "Negative" else "#F59E0B"
+                        
                         st.markdown(f"""
-                        <div style="display: flex; justify-content: space-between; align-items: center; 
-                                    margin-bottom: 12px; padding: 12px; 
-                                    background: linear-gradient(135deg, {bg_color}, rgba(255, 255, 255, 0.3));
-                                    border-radius: 8px; border-left: 4px solid {text_color};">
-                            <div style="display: flex; align-items: center;">
-                                <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
-                                <span style="font-size: 16px; color: #1E293B; font-weight: 500;">
-                                    {sentiment_type}
-                                </span>
-                            </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px; background-color: {bg_color}; border-radius: 6px;">
+                            <span style="font-size: 16px; color: #1E293B;">
+                                {icon} <strong>{sentiment_type}</strong>
+                            </span>
                             <div style="text-align: right;">
-                                <div style="font-size: 22px; font-weight: bold; color: {text_color};">
+                                <div style="font-size: 18px; font-weight: bold; color: {text_color};">
                                     {count}
                                 </div>
-                                <div style="font-size: 14px; color: #64748B; font-weight: 500;">
+                                <div style="font-size: 12px; color: #64748B;">
                                     {percentage:.1f}%
                                 </div>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # Latest update time with better styling
+                # Latest update time
                 st.markdown("---")
                 if not self.df.empty and 'DateTime_ET' in self.df.columns:
                     latest_news_time = self.df['DateTime_ET'].iloc[0]
-                    st.markdown(f"""
-                    <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; text-align: center;">
-                        <div style="color: #64748B; font-size: 14px; font-weight: 500; margin-bottom: 5px;">
-                            ⏰ Last News Update
-                        </div>
-                        <div style="color: #1E293B; font-size: 16px; font-weight: 600;">
-                            {latest_news_time.strftime('%Y-%m-%d %H:%M:%S ET')}
-                        </div>
+                    st.caption(f"""
+                    <div style="text-align: center; color: #64748B; font-size: 12px;">
+                        📅 Last update: {latest_news_time.strftime('%Y-%m-%d %H:%M:%S %Z')}
+
                     </div>
                     """, unsafe_allow_html=True)
         
         with col2:
-            # News feed section with better styling
-            st.markdown("""
-            <div style="background: white; padding: 20px; border-radius: 10px; 
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                        margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; color: #1E293B;">📰 Live News Feed</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <span style="background: #F1F5F9; padding: 5px 10px; border-radius: 6px; 
-                                    color: #64748B; font-size: 14px; font-weight: 500;">
-                            {len(self.df)} Items
-                        </span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # News feed section
+            st.subheader("📰 Live News Feed")
             
             # Create clean news display
             if self.df is not None and not self.df.empty:
@@ -569,102 +482,31 @@ class NewsSentimentAnalyzer:
                         
                         # Get color and indicator
                         if news_sentiment['sentiment'] == "Positive":
-                            bg_color = "rgba(16, 185, 129, 0.1)"
-                            border_color = "#10B981"
-                            text_color = "#065F46"
-                            indicator = "📈"
+                            text_color = "#10B981"  # Green
+                            indicator = "▲"
                         elif news_sentiment['sentiment'] == "Negative":
-                            bg_color = "rgba(239, 68, 68, 0.1)"
-                            border_color = "#EF4444"
-                            text_color = "#991B1B"
-                            indicator = "📉"
+                            text_color = "#EF4444"  # Red
+                            indicator = "▼"
                         else:
-                            bg_color = "rgba(245, 158, 11, 0.1)"
-                            border_color = "#F59E0B"
-                            text_color = "#92400E"
-                            indicator = "📊"
+                            text_color = "#F59E0B"  # Yellow/Amber
+                            indicator = "●"
                         
-                        # Display the news item with better styling
-                        st.markdown(f"""
-                        <div style="background: {bg_color}; 
-                                    border-left: 4px solid {border_color};
-                                    padding: 16px; 
-                                    margin-bottom: 12px; 
-                                    border-radius: 8px;
-                                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <div style="display: flex; justify-content: space-between; 
-                                        align-items: flex-start; margin-bottom: 8px;">
-                                <span style="background: {border_color}; color: white; 
-                                            padding: 4px 8px; border-radius: 4px; 
-                                            font-size: 12px; font-weight: bold;">
-                                    {indicator} {news_sentiment['sentiment']}
-                                </span>
-                                <span style="color: #64748B; font-size: 14px; font-weight: 500;">
-                                    ⏰ {timestamp} ET
-                                </span>
-                            </div>
-                            <div style="color: {text_color}; font-size: 15px; line-height: 1.5;">
-                                {news_text}
-                            </div>
-                            <div style="margin-top: 8px; color: #94A3B8; font-size: 13px;">
-                                Sentiment Score: <span style="color: {border_color}; font-weight: bold;">
-                                {news_sentiment['score']:.1f}%</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        # Display the news item
+                        st.markdown(
+                            f"**[{timestamp}] {indicator}** <span style='color: {text_color}'>{news_text}</span>",
+                            unsafe_allow_html=True
+                        )
                 
-                # News statistics with better styling
-                st.markdown("""
-                <div style="background: white; padding: 20px; border-radius: 10px; 
-                            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                            margin-top: 20px;">
-                    <h4 style="margin: 0 0 15px 0; color: #1E293B;">📊 News Statistics</h4>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                """, unsafe_allow_html=True)
-                
+                # News statistics below the news items
+                st.markdown("---")
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
-                    st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, #F8FAFC, #F1F5F9); 
-                                padding: 15px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 14px; color: #64748B; margin-bottom: 5px;">
-                            📊 Total News
-                        </div>
-                        <div style="font-size: 28px; font-weight: bold; color: #1E293B;">
-                            {len(self.df)}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
+                    st.metric("📊 Total News", len(self.df))
                 with col_b:
                     if not self.df.empty and 'DateTime_ET' in self.df.columns:
                         latest_time = self.df['DateTime_ET'].iloc[0].strftime("%H:%M ET")
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #F8FAFC, #F1F5F9); 
-                                    padding: 15px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 14px; color: #64748B; margin-bottom: 5px;">
-                                🕒 Latest Update
-                            </div>
-                            <div style="font-size: 28px; font-weight: bold; color: #1E293B;">
-                                {latest_time}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
+                        st.metric("🕒 Latest", latest_time)
                 with col_c:
-                    sentiment_color = overall_sentiment['color']
-                    st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, #F8FAFC, #F1F5F9); 
-                                padding: 15px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 14px; color: #64748B; margin-bottom: 5px;">
-                            📈 Overall Sentiment
-                        </div>
-                        <div style="font-size: 28px; font-weight: bold; color: {sentiment_color};">
-                            {overall_sentiment['score']:.1f}%
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown("</div></div>", unsafe_allow_html=True)
+                    st.metric("📈 Sentiment", f"{overall_sentiment['score']:.1f}%")
             else:
-                st.info("📭 No news items to display.")
+                st.info("No news items to display.")
