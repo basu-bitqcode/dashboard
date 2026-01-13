@@ -38,7 +38,17 @@ hide_streamlit_style = """
     </style>
 """
 
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+.block-container {
+    padding-top: 1.2rem;
+    padding-bottom: 0.5rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # st.markdown("""
 # <style>
