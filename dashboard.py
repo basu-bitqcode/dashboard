@@ -37,22 +37,23 @@ hide_streamlit_style = """
     header {visibility: hidden;}
     </style>
 """
-# st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-/* Kill the ugly top gap inside tabs */
-div[data-testid="stTabs"] > div:first-child {
-    padding-top: 0px !important;
-    margin-top: -12px !important;
-}
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-/* Kill block padding inside each tab */
-div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stTabs"]) {
-    padding-top: 0px !important;
-}
-</style>
-""", unsafe_allow_html=True)
+# st.markdown("""
+# <style>
+# /* Kill the ugly top gap inside tabs */
+# div[data-testid="stTabs"] > div:first-child {
+#     padding-top: 0px !important;
+#     margin-top: -12px !important;
+# }
+
+# /* Kill block padding inside each tab */
+# div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stTabs"]) {
+#     padding-top: 0px !important;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 
 # st._config.set_option('client.showErrorDetails', True)
