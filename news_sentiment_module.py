@@ -109,69 +109,80 @@ class NewsSentimentAnalyzer:
         return dt_us
 
     
-    def load_news_data(self):
-        """Load news data from Google Sheet using latest available date"""
-        try:
-            if self.google_sheet_url:
-                # For public Google Sheets
-                if '/edit#' in self.google_sheet_url:
-                    # Extract sheet ID
-                    if 'gid=' in self.google_sheet_url:
-                        sheet_id = self.google_sheet_url.split('gid=')[1]
-                        csv_url = self.google_sheet_url.replace('/edit#gid=', f'/export?format=csv&gid={sheet_id}')
+        def load_news_data(self):
+            """Load news data from Google Sheet using latest available date"""
+            try:
+                if self.google_sheet_url:
+                    # For public Google Sheets
+                    if '/edit#' in self.google_sheet_url:
+                        # Extract sheet ID
+                        if 'gid=' in self.google_sheet_url:
+                            sheet_id = self.google_sheet_url.split('gid=')[1]
+                            csv_url = self.google_sheet_url.replace('/edit#gid=', f'/export?format=csv&gid={sheet_id}')
+                        else:
+                            csv_url = self.google_sheet_url.replace('/edit#', '/export?format=csv&gid=0')
                     else:
-                        csv_url = self.google_sheet_url.replace('/edit#', '/export?format=csv&gid=0')
-                else:
-                    # Assume it's already a CSV export URL
-                    csv_url = self.google_sheet_url
-                
-                # Make sure it's a CSV export URL
-                if 'export?format=csv' not in csv_url:
-                    if '/edit?' in csv_url:
-                        csv_url = csv_url.replace('/edit?', '/export?format=csv&')
-                    else:
-                        csv_url = f"{csv_url}/export?format=csv"
-                
-                self.df = pd.read_csv(csv_url)
-                
-                if self.df is not None and not self.df.empty:
-                    # Clean column names
-                    self.df.columns = [col.strip() for col in self.df.columns]
+                        # Assume it's already a CSV export URL
+                        csv_url = self.google_sheet_url
                     
-                    # Clean news text
-                    if 'News' in self.df.columns:
-                        self.df['Cleaned_News'] = self.df['News'].apply(self.clean_text)
-                        # Remove empty news
-                        self.df = self.df[self.df['Cleaned_News'].str.strip() != '']
+                    # Make sure it's a CSV export URL
+                    if 'export?format=csv' not in csv_url:
+                        if '/edit?' in csv_url:
+                            csv_url = csv_url.replace('/edit?', '/export?format=csv&')
+                        else:
+                            csv_url = f"{csv_url}/export?format=csv"
                     
-                    # Parse datetime
-                    if 'DateTime' in self.df.columns:
-                        self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
-                        
-                        # Filter for LATEST AVAILABLE DATE instead of today
-                        self.df['Date'] = pd.to_datetime(self.df['DateTime_ET']).dt.date
-                        
-                        # Get the latest date from the data
-                        self.latest_available_date = self.df['Date'].max()
-                        
-                        # Filter for the latest available date
-                        self.df = self.df[self.df['Date'] == self.latest_available_date]
-                        
-                        if len(self.df) == 0:
-                            # If no data for latest date, use the most recent available data
-                            self.df = self.df.sort_values('Date', ascending=False).head(20)
-                            if len(self.df) > 0:
-                                self.latest_available_date = self.df['Date'].iloc[0]
-                        
-                        # Sort by datetime (newest first)
-                        self.df = self.df.sort_values('DateTime_ET', ascending=False)
+                    self.df = pd.read_csv(csv_url)
                     
-                    return True
-            return False
-            
-        except Exception as e:
-            st.error(f"Error loading news data: {str(e)}")
-            return False
+                    if self.df is not None and not self.df.empty:
+                        # Clean column names
+                        self.df.columns = [col.strip() for col in self.df.columns]
+                        
+                        # Clean news text
+                        if 'News' in self.df.columns:
+                            self.df['Cleaned_News'] = self.df['News'].apply(self.clean_text)
+                            # Remove empty news
+                            self.df = self.df[self.df['Cleaned_News'].str.strip() != '']
+                        
+                        # Parse datetime
+                        if 'DateTime' in self.df.columns:
+                            self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
+                            
+                            # Filter out rows where DateTime_ET is None (parse failed)
+                            self.df = self.df[self.df['DateTime_ET'].notna()]
+                            
+                            if not self.df.empty:
+                                # Extract date from datetime
+                                self.df['Date'] = self.df['DateTime_ET'].apply(
+                                    lambda x: x.date() if x is not None and pd.notna(x) else None
+                                )
+                                
+                                # Filter out rows where Date is None
+                                self.df = self.df[self.df['Date'].notna()]
+                                
+                                if not self.df.empty:
+                                    # Get the latest date from the data
+                                    self.latest_available_date = self.df['Date'].max()
+                                    
+                                    # Filter for the latest available date
+                                    self.df = self.df[self.df['Date'] == self.latest_available_date]
+                                    
+                                    if len(self.df) == 0:
+                                        # If no data for latest date, use the most recent available data
+                                        self.df = self.df.sort_values('DateTime_ET', ascending=False).head(20)
+                                        if len(self.df) > 0:
+                                            # Extract the date from the first row
+                                            self.latest_available_date = self.df.iloc[0]['Date']
+                                    
+                                    # Sort by datetime (newest first)
+                                    self.df = self.df.sort_values('DateTime_ET', ascending=False)
+                        
+                        return True
+                return False
+                
+            except Exception as e:
+                st.error(f"Error loading news data: {str(e)}")
+                return False
     
     def analyze_sentiment(self, text):
         """Analyze sentiment using TextBlob with financial keyword boosting"""
