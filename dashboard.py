@@ -651,6 +651,18 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     
     fig = go.Figure()
     
+    # DAILY P&L BARS (LEFT Y-AXIS) - MOVED THIS UP SINCE IT'S NOW ON LEFT
+    colors = ['#10B981' if val >= 0 else '#EF4444' for val in daily_pnl_df_sorted['Net P&L']]
+    fig.add_trace(go.Bar(
+        x=daily_pnl_df_sorted['Date_Str'],
+        y=daily_pnl_df_sorted['Net P&L'],
+        name='Daily P&L',
+        marker_color=colors,
+        opacity=0.7,
+        hovertemplate=f'<b>%{{x}}</b><br>Daily P&L: {currency_symbol}%{{y:,.2f}}<extra></extra>',
+        yaxis='y'  # Daily P&L on LEFT Y-axis
+    ))
+    
     # Create color segments for Capital line (like intraday chart)
     segments = []
     current_segment = {'x': [], 'y': [], 'color': None}
@@ -685,7 +697,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     if current_segment['x']:
         segments.append(current_segment)
     
-    # Add colored segments for Capital line
+    # Add colored segments for Capital line (RIGHT Y-AXIS)
     for segment in segments:
         fig.add_trace(go.Scatter(
             x=segment['x'],
@@ -694,10 +706,11 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             line=dict(shape='spline', smoothing=0.8, width=4, color=segment['color']),
             showlegend=False,
             hoverinfo='skip',
-            name='Capital'
+            name='Capital',
+            yaxis='y2'  # Capital on RIGHT Y-axis
         ))
     
-    # Add invisible trace for hover on Capital line
+    # Add invisible trace for hover on Capital line (RIGHT Y-AXIS)
     fig.add_trace(go.Scatter(
         x=daily_pnl_df_sorted['Date_Str'],
         y=daily_pnl_df_sorted['Capital'],
@@ -706,22 +719,10 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
         hovertemplate=f'<b>%{{x}}</b><br>Capital: {currency_symbol}%{{y:,.2f}}<extra></extra>',
         showlegend=True,
         name='Capital',
-        yaxis='y2'  # Capital now on right Y-axis
+        yaxis='y2'  # Capital on RIGHT Y-axis
     ))
     
-    # Add Daily P&L bars (LEFT Y-axis)
-    colors = ['#10B981' if val >= 0 else '#EF4444' for val in daily_pnl_df_sorted['Net P&L']]
-    fig.add_trace(go.Bar(
-        x=daily_pnl_df_sorted['Date_Str'],
-        y=daily_pnl_df_sorted['Net P&L'],
-        name='Daily P&L',
-        marker_color=colors,
-        opacity=0.7,
-        hovertemplate=f'<b>%{{x}}</b><br>Daily P&L: {currency_symbol}%{{y:,.2f}}<extra></extra>',
-        yaxis='y'  # Daily P&L now on left Y-axis
-    ))
-    
-    # Add extreme points for Capital line
+    # Add extreme points for Capital line (RIGHT Y-AXIS)
     fig.add_trace(go.Scatter(
         x=[highest_capital_row['Date_Str']],
         y=[highest_capital],
@@ -733,7 +734,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
         hovertemplate=f'<b>Highest Capital: {currency_symbol}{highest_capital:,.2f}</b><br>Date: %{{x}}<extra></extra>',
         showlegend=False,
         name='Highest Capital',
-        yaxis='y2'  # Capital extremes also on right Y-axis
+        yaxis='y2'  # Capital extremes on RIGHT Y-axis
     ))
     
     fig.add_trace(go.Scatter(
@@ -747,7 +748,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
         hovertemplate=f'<b>Lowest Capital: {currency_symbol}{lowest_capital:,.2f}</b><br>Date: %{{x}}<extra></extra>',
         showlegend=False,
         name='Lowest Capital',
-        yaxis='y2'  # Capital extremes also on right Y-axis
+        yaxis='y2'  # Capital extremes on RIGHT Y-axis
     ))
     
     # Update layout - SWITCHED Y-AXIS POSITIONS
@@ -781,9 +782,9 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             tickvals=daily_pnl_df_sorted['Date_Str'].tolist(),
             ticktext=daily_pnl_df_sorted['Date_Str'].tolist()
         ),
-        # DAILY P&L on LEFT Y-axis
+        # DAILY P&L on LEFT Y-axis (with Daily P&L data range)
         yaxis=dict(
-            title=f"Daily P&L ({currency_symbol})",  # Changed to Daily P&L
+            title=f"Daily P&L ({currency_symbol})",
             side="left",
             showgrid=True,
             gridcolor='#F1F5F9',
@@ -793,11 +794,14 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             tickfont=dict(size=11, color='#64748B'),
             linecolor='#E2E8F0',
             showline=True,
-            zeroline=False
+            zeroline=False,
+            # Use Daily P&L data range for this axis
+            range=[min(daily_pnl_df_sorted['Net P&L'].min() * 1.1, 0), 
+                   max(daily_pnl_df_sorted['Net P&L'].max() * 1.1, 0)]
         ),
-        # CAPITAL on RIGHT Y-axis
+        # CAPITAL on RIGHT Y-axis (with Capital data range)
         yaxis2=dict(
-            title=f"Capital ({currency_symbol})",  # Changed to Capital
+            title=f"Capital ({currency_symbol})",
             side="right",
             overlaying="y",
             showgrid=False,
@@ -806,11 +810,14 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             tickfont=dict(size=11, color='#64748B'),
             linecolor='#E2E8F0',
             showline=True,
-            zeroline=False
+            zeroline=False,
+            # Use Capital data range for this axis
+            range=[lowest_capital * 0.99, highest_capital * 1.01]
         )
     )
     
     return fig
+
 
 def create_daily_pnl_dashboard(daily_pnl_df, region="INDIA"):
     """Create Daily PnL dashboard with improved visualizations"""
