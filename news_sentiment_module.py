@@ -220,29 +220,37 @@ class NewsSentimentAnalyzer:
         }
 
     
-    def create_speedometer(self, sentiment_score, sentiment_label):
+    def create_speedometer(self, sentiment_score, sentiment_label, width=400):
         """
-        Clean, professional sentiment speedometer
-        Fixes:
-        - Hidden labels
-        - Ugly center text
-        - Wrong neutral color
+        Responsive, professional sentiment speedometer
+        - Dynamic font scaling
+        - No overflow
+        - Looks good at any size
         """
     
-        # ---------- STRICT COLOR LOGIC ----------
+        # ---------- COLOR LOGIC ----------
         if sentiment_label == "Positive":
             main_color = "#2563EB"   # Blue
         elif sentiment_label == "Negative":
             main_color = "#DC2626"   # Red
         else:
-            main_color = "#9CA3AF"   # Gray (Neutral)
+            main_color = "#9CA3AF"   # Neutral Gray
+    
+        # ---------- DYNAMIC FONT SCALING ----------
+        number_font_size = int(width * 0.13)      # % number (57%)
+        label_font_size  = int(width * 0.045)     # POSITIVE / NEGATIVE
+        tick_font_size   = int(width * 0.03)
+        title_font_size  = int(width * 0.05)
+    
+        # Safety caps
+        number_font_size = min(max(number_font_size, 28), 64)
     
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=sentiment_score,
             number={
                 "font": {
-                    "size": 52,
+                    "size": number_font_size,
                     "color": main_color,
                     "family": "Inter, Arial"
                 },
@@ -251,7 +259,6 @@ class NewsSentimentAnalyzer:
             gauge={
                 "axis": {
                     "range": [0, 100],
-                    "tickmode": "array",
                     "tickvals": [0, 25, 50, 75, 100],
                     "ticktext": [
                         "Very Bearish",
@@ -261,7 +268,7 @@ class NewsSentimentAnalyzer:
                         "Very Bullish"
                     ],
                     "tickfont": {
-                        "size": 12,
+                        "size": tick_font_size,
                         "color": "#475569"
                     }
                 },
@@ -270,23 +277,22 @@ class NewsSentimentAnalyzer:
                     "thickness": 0.32
                 },
                 "bgcolor": "white",
-                "borderwidth": 0,
                 "steps": [
-                    {"range": [0, 40], "color": "#FEE2E2"},   # Light Red
-                    {"range": [40, 60], "color": "#E5E7EB"}, # Neutral Gray
-                    {"range": [60, 100], "color": "#DBEAFE"} # Light Blue
+                    {"range": [0, 40], "color": "#FEE2E2"},
+                    {"range": [40, 60], "color": "#E5E7EB"},
+                    {"range": [60, 100], "color": "#DBEAFE"}
                 ],
             }
         ))
     
-        # ---------- SENTIMENT LABEL (CLEAN & SEPARATE) ----------
+        # ---------- SENTIMENT LABEL ----------
         fig.add_annotation(
             x=0.5,
-            y=0.22,
+            y=0.18,
             text=f"<b>{sentiment_label.upper()}</b>",
             showarrow=False,
             font=dict(
-                size=18,
+                size=label_font_size,
                 color=main_color,
                 family="Inter, Arial"
             ),
@@ -301,7 +307,7 @@ class NewsSentimentAnalyzer:
             text="<b>MARKET SENTIMENT</b>",
             showarrow=False,
             font=dict(
-                size=20,
+                size=title_font_size,
                 color="#0F172A",
                 family="Inter, Arial"
             ),
@@ -309,15 +315,15 @@ class NewsSentimentAnalyzer:
             yref="paper"
         )
     
-        # ---------- LAYOUT FIX (NO CLIPPING) ----------
         fig.update_layout(
-            height=420,
-            margin=dict(l=50, r=50, t=90, b=50),
+            height=int(width * 0.95),
+            margin=dict(l=30, r=30, t=80, b=40),
             paper_bgcolor="white",
             plot_bgcolor="white"
         )
     
         return fig
+
 
 
     
@@ -384,19 +390,14 @@ class NewsSentimentAnalyzer:
             st.subheader("📊 Market Sentiment Indicator")
             
             # Display speedometer
-            # fig = self.create_speedometer(
-            #     overall_sentiment['score'],
-            #     overall_sentiment['sentiment'],
-            #     overall_sentiment['color']
-            # )
-
             fig = self.create_speedometer(
                 overall_sentiment['score'],
-                overall_sentiment['sentiment']
-            )
-
-            
+                overall_sentiment['sentiment'],
+                width=st.session_state.get("plot_width", 380)
+                )
+        
             st.plotly_chart(fig, use_container_width=True)
+
             
             # Sentiment statistics
             st.markdown("---")
