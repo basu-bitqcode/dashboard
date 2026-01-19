@@ -10,16 +10,13 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class NewsSentimentAnalyzer:
+
     def __init__(self, google_sheet_url=None):
-        """
-        Initialize the News Sentiment Analyzer
-        
-        Args:
-            google_sheet_url: URL of the Google Sheet
-        """
+        """Initialize the News Sentiment Analyzer"""
         self.google_sheet_url = google_sheet_url
         self.df = None
 
+        # ---------------- FINANCIAL EVENT RULES ----------------
         self.financial_events = {
             "earnings_beat": {
                 "patterns": ["beat estimates", "earnings beat", "profit jumps"],
@@ -55,198 +52,129 @@ class NewsSentimentAnalyzer:
             },
         }
 
-        def has_negation_or_contrast(self, text):
-            negations = ["but", "however", "despite", "although", "while"]
-            return any(n in text for n in negations)
+    # ---------------------------------------------------------
+    # TEXT UTILITIES
+    # ---------------------------------------------------------
 
+    def has_negation_or_contrast(self, text: str) -> bool:
+        """
+        Detect contrast / negation phrases that flip or dampen sentiment
+        """
+        contrast_words = [
+            "but", "however", "despite", "although",
+            "while", "yet", "nevertheless", "still"
+        ]
+        text = text.lower()
+        return any(word in text for word in contrast_words)
 
-        
-        # Financial keywords for sentiment boosting
-        self.positive_keywords = [
-            'beat', 'surge', 'jump', 'rise', 'gain', 'rally', 'bull', 'positive',
-            'growth', 'profit', 'increase', 'higher', 'record', 'win', 'success',
-            'strong', 'optimistic', 'boom', 'breakthrough', 'dividend', 'buyback',
-            'upgrade', 'outperform', 'bullish', 'recovery', 'soar', 'lifeline',
-            'cut rates', 'break', 'breakout', 'outperform', 'beat estimates'
-        ]
-        
-        self.negative_keywords = [
-            'cut', 'plunge', 'drop', 'fall', 'loss', 'crash', 'bear', 'negative',
-            'decline', 'decrease', 'lower', 'miss', 'fail', 'weak', 'pessimistic',
-            'slump', 'downgrade', 'underperform', 'bearish', 'recession', 'warn',
-            'risk', 'volatility', 'uncertainty', 'selloff', 'downturn', 'bankrupt',
-            'soaring', 'beating', 'crisis', 'tumble', 'plummet', 'collapse', 'slump'
-        ]
-    
     def clean_text(self, text):
-        """Remove emojis, special characters, and clean text for NLP"""
         if pd.isna(text):
             return ""
-        
-        # Remove URLs
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-        
-        # Remove Twitter handles
+
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text)
         text = re.sub(r'@\w+', '', text)
-        
-        # Remove emojis
-        emoji_pattern = re.compile("["
-            u"\U0001F600-\U0001F64F"  # emoticons
-            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-            u"\U0001F680-\U0001F6FF"  # transport & map symbols
-            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            u"\U00002700-\U000027BF"  # Dingbats
-            u"\U000024C2-\U0001F251" 
-            "]+", flags=re.UNICODE)
-        text = emoji_pattern.sub(r'', text)
-        
-        # Remove special characters but keep basic punctuation
-        text = re.sub(r'[^\w\s.,!?-]', ' ', text)
-        
-        # Remove RT (retweet) mentions
         text = re.sub(r'\bRT\b', '', text)
-        
-        # Remove extra whitespace
+        text = re.sub(r'[^\w\s.,!?-]', ' ', text)
         text = ' '.join(text.split())
-        
         return text.strip()
-    
+
+    # ---------------------------------------------------------
+    # DATETIME HANDLING
+    # ---------------------------------------------------------
 
     def parse_datetime(self, datetime_str):
-        """
-        Parse datetime string and convert to US Market Time (NASDAQ / NYSE)
-        """
-    
         if pd.isna(datetime_str):
             return None
-    
+
         datetime_str = str(datetime_str).strip()
-    
+
         formats = [
             "%B %d, %Y at %I:%M%p",
             "%B %d, %Y %I:%M%p",
             "%B %d, %Y at %I:%M:%S%p",
             "%Y-%m-%d %H:%M:%S"
         ]
-    
-        dt = None
+
         for fmt in formats:
             try:
                 dt = datetime.strptime(datetime_str, fmt)
-                break
+                dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(ZoneInfo("America/New_York"))
             except ValueError:
                 continue
-    
-        if dt is None:
-            return None
-    
-        # Assume input is UTC unless specified
-        dt_utc = dt.replace(tzinfo=timezone.utc)
-    
-        # Convert to US Market Time (DST safe)
-        dt_us = dt_utc.astimezone(ZoneInfo("America/New_York"))
-    
-        return dt_us
 
-    
+        return None
+
+    # ---------------------------------------------------------
+    # DATA LOADING
+    # ---------------------------------------------------------
+
     def load_news_data(self):
-        """Load news data from Google Sheet"""
         try:
-            if self.google_sheet_url:
-                # For public Google Sheets
-                if '/edit#' in self.google_sheet_url:
-                    # Extract sheet ID
-                    if 'gid=' in self.google_sheet_url:
-                        sheet_id = self.google_sheet_url.split('gid=')[1]
-                        csv_url = self.google_sheet_url.replace('/edit#gid=', f'/export?format=csv&gid={sheet_id}')
-                    else:
-                        csv_url = self.google_sheet_url.replace('/edit#', '/export?format=csv&gid=0')
-                else:
-                    # Assume it's already a CSV export URL
-                    csv_url = self.google_sheet_url
-                
-                # Make sure it's a CSV export URL
-                if 'export?format=csv' not in csv_url:
-                    if '/edit?' in csv_url:
-                        csv_url = csv_url.replace('/edit?', '/export?format=csv&')
-                    else:
-                        csv_url = f"{csv_url}/export?format=csv"
-                
-                self.df = pd.read_csv(csv_url)
-                
-                if self.df is not None and not self.df.empty:
-                    # Clean column names
-                    self.df.columns = [col.strip() for col in self.df.columns]
-                    
-                    # Clean news text
-                    if 'News' in self.df.columns:
-                        self.df['Cleaned_News'] = self.df['News'].apply(self.clean_text)
-                        # Remove empty news
-                        self.df = self.df[self.df['Cleaned_News'].str.strip() != '']
-                    
-                    # Parse datetime
-                    if 'DateTime' in self.df.columns:
-                        self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
-                    
-                        self.df['Date'] = pd.to_datetime(self.df['DateTime_ET'], errors="coerce").dt.date
+            if not self.google_sheet_url:
+                return False
 
-                        # 🔥 Drop rows where DateTime parsing failed
-                        self.df = self.df.dropna(subset=['Date'])
-                        
-                        # Now this is SAFE
-                        latest_date = self.df['Date'].max()
+            csv_url = self.google_sheet_url
+            if '/edit' in csv_url:
+                csv_url = csv_url.split('/edit')[0] + '/export?format=csv'
 
-                    
-                        # Filter only that date
-                        self.df = self.df[self.df['Date'] == latest_date]
-                    
-                        # Sort by datetime (newest first)
-                        self.df = self.df.sort_values('DateTime_ET', ascending=False)
+            self.df = pd.read_csv(csv_url)
 
-                    
-                    return True
-            return False
-            
+            if self.df.empty:
+                return False
+
+            self.df.columns = self.df.columns.str.strip()
+
+            self.df["Cleaned_News"] = self.df["News"].apply(self.clean_text)
+            self.df = self.df[self.df["Cleaned_News"] != ""]
+
+            self.df["DateTime_ET"] = self.df["DateTime"].apply(self.parse_datetime)
+            self.df["Date"] = pd.to_datetime(self.df["DateTime_ET"], errors="coerce").dt.date
+            self.df = self.df.dropna(subset=["Date"])
+
+            latest_date = self.df["Date"].max()
+            self.df = self.df[self.df["Date"] == latest_date]
+            self.df = self.df.sort_values("DateTime_ET", ascending=False)
+
+            return True
+
         except Exception as e:
-            st.error(f"Error loading news data: {str(e)}")
+            st.error(f"Error loading news data: {e}")
             return False
-    
+
+    # ---------------------------------------------------------
+    # SENTIMENT ENGINE (RULE-BASED, FINBERT-READY)
+    # ---------------------------------------------------------
+
     def analyze_sentiment(self, text):
         if not text or pd.isna(text):
-            return {'score': 50, 'sentiment': 'Neutral'}
-    
+            return {"score": 50, "sentiment": "Neutral"}
+
         text_lower = text.lower()
-        score = 50  # Start neutral
-    
-        # ---------- FINANCIAL EVENT IMPACT ----------
-        for event, cfg in self.financial_events.items():
+        score = 50
+
+        # Financial rule impacts
+        for cfg in self.financial_events.values():
             for pattern in cfg["patterns"]:
                 if pattern in text_lower:
                     score += cfg["impact"]
-    
-        # ---------- NEGATION / CONTRAST ----------
+
+        # Contrast dampening
         if self.has_negation_or_contrast(text_lower):
-            score = 50 + (score - 50) * 0.6  # dampen conviction
-    
-        # ---------- FALLBACK NLP (LIGHT WEIGHT) ----------
-        polarity = TextBlob(text).sentiment.polarity
-        score += polarity * 15  # small influence only
-    
-        # ---------- CLAMP ----------
+            score = 50 + (score - 50) * 0.6
+
         score = max(0, min(100, score))
-    
-        # ---------- LABEL ----------
+
         if score > 58:
             sentiment = "Positive"
         elif score < 42:
             sentiment = "Negative"
         else:
             sentiment = "Neutral"
-    
+
         return {
-            'score': score,
-            'sentiment': sentiment,
-            'polarity': polarity
+            "score": score,
+            "sentiment": sentiment
         }
 
 
