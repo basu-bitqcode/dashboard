@@ -19,6 +19,47 @@ class NewsSentimentAnalyzer:
         """
         self.google_sheet_url = google_sheet_url
         self.df = None
+
+        self.financial_events = {
+            "earnings_beat": {
+                "patterns": ["beat estimates", "earnings beat", "profit jumps"],
+                "impact": +12
+            },
+            "earnings_miss": {
+                "patterns": ["miss estimates", "earnings miss"],
+                "impact": -15
+            },
+            "guidance_up": {
+                "patterns": ["raises guidance", "outlook raised"],
+                "impact": +10
+            },
+            "guidance_down": {
+                "patterns": ["cuts guidance", "outlook lowered"],
+                "impact": -12
+            },
+            "rate_cut": {
+                "patterns": ["rate cut", "interest rates lowered"],
+                "impact": +8
+            },
+            "rate_hike": {
+                "patterns": ["rate hike", "interest rates raised"],
+                "impact": -10
+            },
+            "regulatory_risk": {
+                "patterns": ["probe", "regulatory action", "antitrust"],
+                "impact": -14
+            },
+            "order_win": {
+                "patterns": ["order win", "new contract", "large deal"],
+                "impact": +9
+            },
+        }
+
+        def has_negation_or_contrast(self, text):
+            negations = ["but", "however", "despite", "although", "while"]
+            return any(n in text for n in negations)
+
+
         
         # Financial keywords for sentiment boosting
         self.positive_keywords = [
@@ -171,56 +212,43 @@ class NewsSentimentAnalyzer:
             return False
     
     def analyze_sentiment(self, text):
-        """Analyze sentiment using TextBlob with financial keyword boosting"""
         if not text or pd.isna(text):
-            return {'score': 50, 'sentiment': 'Neutral', 'color': '#FFFF00', 'indicator': '●'}
-        
-        text_lower = str(text).lower()
-        
-        # Base sentiment from TextBlob
-        analysis = TextBlob(str(text))
-        polarity = analysis.sentiment.polarity
-        
-        # Adjust based on financial keywords
-        positive_count = sum(1 for keyword in self.positive_keywords if keyword in text_lower)
-        negative_count = sum(1 for keyword in self.negative_keywords if keyword in text_lower)
-        
-        # Boost polarity based on keyword matches
-        keyword_boost = 0
-        if positive_count > negative_count:
-            keyword_boost = 0.25  # Boost for positive keywords
-        elif negative_count > positive_count:
-            keyword_boost = -0.25  # Reduce for negative keywords
-        
-        # Apply keyword boost
-        polarity = max(-1.0, min(1.0, polarity + keyword_boost))
-        
-        # Convert to score between 0 and 100
-        score = (polarity + 1) * 50
-        
-        # Adjust thresholds for better distribution
-        if score > 55:  # More sensitive positive threshold
+            return {'score': 50, 'sentiment': 'Neutral'}
+    
+        text_lower = text.lower()
+        score = 50  # Start neutral
+    
+        # ---------- FINANCIAL EVENT IMPACT ----------
+        for event, cfg in self.financial_events.items():
+            for pattern in cfg["patterns"]:
+                if pattern in text_lower:
+                    score += cfg["impact"]
+    
+        # ---------- NEGATION / CONTRAST ----------
+        if self.has_negation_or_contrast(text_lower):
+            score = 50 + (score - 50) * 0.6  # dampen conviction
+    
+        # ---------- FALLBACK NLP (LIGHT WEIGHT) ----------
+        polarity = TextBlob(text).sentiment.polarity
+        score += polarity * 15  # small influence only
+    
+        # ---------- CLAMP ----------
+        score = max(0, min(100, score))
+    
+        # ---------- LABEL ----------
+        if score > 58:
             sentiment = "Positive"
-            color = "#00FF00"  # Bright green for terminal
-            indicator = "▲"
-        elif score < 45:  # More sensitive negative threshold
+        elif score < 42:
             sentiment = "Negative"
-            color = "#FF0000"  # Bright red for terminal
-            indicator = "▼"
         else:
             sentiment = "Neutral"
-            color = "#FFFF00"  # Yellow for terminal
-            indicator = "●"
-        
+    
         return {
-            'score': min(max(score, 0), 100),
+            'score': score,
             'sentiment': sentiment,
-            'color': color,
-            'indicator': indicator,
-            'polarity': polarity,
-            'positive_keywords': positive_count,
-            'negative_keywords': negative_count
+            'polarity': polarity
         }
+
 
     
     def create_speedometer(self, sentiment_score, sentiment_label, width=420):
