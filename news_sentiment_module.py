@@ -225,7 +225,9 @@ class NewsSentimentAnalyzer:
     
     def create_speedometer(self, sentiment_score, sentiment_label, width=420):
         """
-        Guaranteed non-overlapping, dynamic, professional speedometer
+        Clean, compact, non-overlapping speedometer
+        - Wrapped tick labels
+        - No redundant title
         """
     
         # ---------- COLOR ----------
@@ -239,23 +241,35 @@ class NewsSentimentAnalyzer:
         # ---------- DYNAMIC FONT SIZES ----------
         number_font = int(width * 0.13)
         label_font  = int(width * 0.055)
-        tick_font   = int(width * 0.032)
-        title_font  = int(width * 0.06)
+        tick_font   = int(width * 0.028)
     
         number_font = min(max(number_font, 28), 68)
     
         fig = go.Figure(go.Indicator(
             mode="gauge",
             value=sentiment_score,
-            domain={"x": [0, 1], "y": [0.35, 1]},  # 🔥 TOP ZONE ONLY
+            domain={"x": [0, 1], "y": [0.38, 1]},  # Top zone
             gauge={
                 "axis": {
                     "range": [0, 100],
                     "tickvals": [0, 25, 50, 75, 100],
-                    "ticktext": ["Very Bearish", "Bearish", "Neutral", "Bullish", "Very Bullish"],
-                    "tickfont": {"size": tick_font, "color": "#374151"}
+                    # 🔥 WRAPPED LABELS
+                    "ticktext": [
+                        "Very<br>Bearish",
+                        "Bearish",
+                        "Neutral",
+                        "Bullish",
+                        "Very<br>Bullish"
+                    ],
+                    "tickfont": {
+                        "size": tick_font,
+                        "color": "#374151"
+                    }
                 },
-                "bar": {"color": main_color, "thickness": 0.32},
+                "bar": {
+                    "color": main_color,
+                    "thickness": 0.32
+                },
                 "bgcolor": "white",
                 "steps": [
                     {"range": [0, 40], "color": "#FEE2E2"},
@@ -265,10 +279,10 @@ class NewsSentimentAnalyzer:
             }
         ))
     
-        # ---------- BIG NUMBER (MIDDLE BAND) ----------
+        # ---------- BIG NUMBER ----------
         fig.add_annotation(
             x=0.5,
-            y=0.22,   # 🔥 BELOW GAUGE
+            y=0.23,
             text=f"<b>{sentiment_score:.0f}%</b>",
             showarrow=False,
             font=dict(size=number_font, color=main_color),
@@ -276,10 +290,10 @@ class NewsSentimentAnalyzer:
             yref="paper"
         )
     
-        # ---------- SENTIMENT LABEL (BOTTOM BAND) ----------
+        # ---------- SENTIMENT LABEL ----------
         fig.add_annotation(
             x=0.5,
-            y=0.12,   # 🔥 WELL SEPARATED
+            y=0.13,
             text=f"<b>{sentiment_label.upper()}</b>",
             showarrow=False,
             font=dict(size=label_font, color=main_color),
@@ -287,25 +301,15 @@ class NewsSentimentAnalyzer:
             yref="paper"
         )
     
-        # ---------- TITLE ----------
-        fig.add_annotation(
-            x=0.5,
-            y=1.15,
-            text="<b>MARKET SENTIMENT</b>",
-            showarrow=False,
-            font=dict(size=title_font, color="#0F172A"),
-            xref="paper",
-            yref="paper"
-        )
-    
         fig.update_layout(
-            height=int(width * 1.05),   # 🔥 MORE VERTICAL BREATHING ROOM
-            margin=dict(l=30, r=30, t=90, b=60),
+            height=int(width * 1.0),
+            margin=dict(l=30, r=30, t=40, b=60),
             paper_bgcolor="white",
             plot_bgcolor="white"
         )
     
         return fig
+
 
 
 
