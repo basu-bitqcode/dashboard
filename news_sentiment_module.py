@@ -439,7 +439,7 @@ class NewsSentimentAnalyzer:
                                 <div style="font-size: 18px; font-weight: bold; color: {text_color};">
                                     {count}
                                 </div>
-                                <div style="font-size: 12px; color: #64748B;">
+                                <div style="font-size: 10px; color: #64748B;">
                                     {percentage:.1f}%
                                 </div>
                             </div>
