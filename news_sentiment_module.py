@@ -147,11 +147,14 @@ class NewsSentimentAnalyzer:
                     if 'DateTime' in self.df.columns:
                         self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
                     
-                        # Extract date from parsed datetime
-                        self.df['Date'] = pd.to_datetime(self.df['DateTime_ET']).dt.date
-                    
-                        # 🔥 Always pick the latest available date in the DF
+                        self.df['Date'] = pd.to_datetime(self.df['DateTime_ET'], errors="coerce").dt.date
+
+                        # 🔥 Drop rows where DateTime parsing failed
+                        self.df = self.df.dropna(subset=['Date'])
+                        
+                        # Now this is SAFE
                         latest_date = self.df['Date'].max()
+
                     
                         # Filter only that date
                         self.df = self.df[self.df['Date'] == latest_date]
