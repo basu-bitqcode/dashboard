@@ -223,57 +223,36 @@ class NewsSentimentAnalyzer:
         }
 
     
-    def create_speedometer(self, sentiment_score, sentiment_label, width=400):
+    def create_speedometer(self, sentiment_score, sentiment_label, width=420):
         """
-        Responsive, professional sentiment speedometer
-        - Dynamic font scaling
-        - No overflow
-        - Looks good at any size
+        Clean, responsive, non-overlapping speedometer
         """
     
-        # ---------- COLOR LOGIC ----------
+        # ---------- COLOR ----------
         if sentiment_label == "Positive":
-            main_color = "#2563EB"   # Blue
+            main_color = "#2563EB"
         elif sentiment_label == "Negative":
-            main_color = "#DC2626"   # Red
+            main_color = "#DC2626"
         else:
-            main_color = "#9CA3AF"   # Neutral Gray
+            main_color = "#6B7280"
     
-        # ---------- DYNAMIC FONT SCALING ----------
-        number_font_size = int(width * 0.13)      # % number (57%)
-        label_font_size  = int(width * 0.045)     # POSITIVE / NEGATIVE
-        tick_font_size   = int(width * 0.03)
-        title_font_size  = int(width * 0.05)
+        # ---------- DYNAMIC SIZES ----------
+        number_font = int(width * 0.14)     # 57%
+        label_font  = int(width * 0.055)    # POSITIVE
+        tick_font   = int(width * 0.035)
+        title_font  = int(width * 0.06)
     
-        # Safety caps
-        number_font_size = min(max(number_font_size, 28), 64)
+        number_font = min(max(number_font, 30), 70)
     
         fig = go.Figure(go.Indicator(
-            mode="gauge+number",
+            mode="gauge",
             value=sentiment_score,
-            number={
-                "font": {
-                    "size": number_font_size,
-                    "color": main_color,
-                    "family": "Inter, Arial"
-                },
-                "suffix": "%"
-            },
             gauge={
                 "axis": {
                     "range": [0, 100],
                     "tickvals": [0, 25, 50, 75, 100],
-                    "ticktext": [
-                        "Very Bearish",
-                        "Bearish",
-                        "Neutral",
-                        "Bullish",
-                        "Very Bullish"
-                    ],
-                    "tickfont": {
-                        "size": tick_font_size,
-                        "color": "#475569"
-                    }
+                    "ticktext": ["Very Bearish", "Bearish", "Neutral", "Bullish", "Very Bullish"],
+                    "tickfont": {"size": tick_font, "color": "#374151"}
                 },
                 "bar": {
                     "color": main_color,
@@ -284,21 +263,28 @@ class NewsSentimentAnalyzer:
                     {"range": [0, 40], "color": "#FEE2E2"},
                     {"range": [40, 60], "color": "#E5E7EB"},
                     {"range": [60, 100], "color": "#DBEAFE"}
-                ],
+                ]
             }
         ))
     
-        # ---------- SENTIMENT LABEL ----------
+        # ---------- BIG NUMBER (CENTER) ----------
         fig.add_annotation(
             x=0.5,
-            y=0.18,
+            y=0.42,
+            text=f"<b>{sentiment_score:.0f}%</b>",
+            showarrow=False,
+            font=dict(size=number_font, color=main_color, family="Inter, Arial"),
+            xref="paper",
+            yref="paper"
+        )
+    
+        # ---------- LABEL BELOW NUMBER ----------
+        fig.add_annotation(
+            x=0.5,
+            y=0.30,
             text=f"<b>{sentiment_label.upper()}</b>",
             showarrow=False,
-            font=dict(
-                size=label_font_size,
-                color=main_color,
-                family="Inter, Arial"
-            ),
+            font=dict(size=label_font, color=main_color, family="Inter, Arial"),
             xref="paper",
             yref="paper"
         )
@@ -306,27 +292,22 @@ class NewsSentimentAnalyzer:
         # ---------- TITLE ----------
         fig.add_annotation(
             x=0.5,
-            y=1.12,
+            y=1.15,
             text="<b>MARKET SENTIMENT</b>",
             showarrow=False,
-            font=dict(
-                size=title_font_size,
-                color="#0F172A",
-                family="Inter, Arial"
-            ),
+            font=dict(size=title_font, color="#0F172A"),
             xref="paper",
             yref="paper"
         )
     
         fig.update_layout(
             height=int(width * 0.95),
-            margin=dict(l=30, r=30, t=80, b=40),
+            margin=dict(l=30, r=30, t=90, b=40),
             paper_bgcolor="white",
             plot_bgcolor="white"
         )
     
         return fig
-
 
 
     
