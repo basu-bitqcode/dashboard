@@ -225,7 +225,7 @@ class NewsSentimentAnalyzer:
     
     def create_speedometer(self, sentiment_score, sentiment_label, width=420):
         """
-        Clean, responsive, non-overlapping speedometer
+        Guaranteed non-overlapping, dynamic, professional speedometer
         """
     
         # ---------- COLOR ----------
@@ -236,17 +236,18 @@ class NewsSentimentAnalyzer:
         else:
             main_color = "#6B7280"
     
-        # ---------- DYNAMIC SIZES ----------
-        number_font = int(width * 0.14)     # 57%
-        label_font  = int(width * 0.055)    # POSITIVE
-        tick_font   = int(width * 0.035)
+        # ---------- DYNAMIC FONT SIZES ----------
+        number_font = int(width * 0.13)
+        label_font  = int(width * 0.055)
+        tick_font   = int(width * 0.032)
         title_font  = int(width * 0.06)
     
-        number_font = min(max(number_font, 30), 70)
+        number_font = min(max(number_font, 28), 68)
     
         fig = go.Figure(go.Indicator(
             mode="gauge",
             value=sentiment_score,
+            domain={"x": [0, 1], "y": [0.35, 1]},  # 🔥 TOP ZONE ONLY
             gauge={
                 "axis": {
                     "range": [0, 100],
@@ -254,10 +255,7 @@ class NewsSentimentAnalyzer:
                     "ticktext": ["Very Bearish", "Bearish", "Neutral", "Bullish", "Very Bullish"],
                     "tickfont": {"size": tick_font, "color": "#374151"}
                 },
-                "bar": {
-                    "color": main_color,
-                    "thickness": 0.32
-                },
+                "bar": {"color": main_color, "thickness": 0.32},
                 "bgcolor": "white",
                 "steps": [
                     {"range": [0, 40], "color": "#FEE2E2"},
@@ -267,24 +265,24 @@ class NewsSentimentAnalyzer:
             }
         ))
     
-        # ---------- BIG NUMBER (CENTER) ----------
+        # ---------- BIG NUMBER (MIDDLE BAND) ----------
         fig.add_annotation(
             x=0.5,
-            y=0.42,
+            y=0.22,   # 🔥 BELOW GAUGE
             text=f"<b>{sentiment_score:.0f}%</b>",
             showarrow=False,
-            font=dict(size=number_font, color=main_color, family="Inter, Arial"),
+            font=dict(size=number_font, color=main_color),
             xref="paper",
             yref="paper"
         )
     
-        # ---------- LABEL BELOW NUMBER ----------
+        # ---------- SENTIMENT LABEL (BOTTOM BAND) ----------
         fig.add_annotation(
             x=0.5,
-            y=0.30,
+            y=0.12,   # 🔥 WELL SEPARATED
             text=f"<b>{sentiment_label.upper()}</b>",
             showarrow=False,
-            font=dict(size=label_font, color=main_color, family="Inter, Arial"),
+            font=dict(size=label_font, color=main_color),
             xref="paper",
             yref="paper"
         )
@@ -301,13 +299,14 @@ class NewsSentimentAnalyzer:
         )
     
         fig.update_layout(
-            height=int(width * 0.95),
-            margin=dict(l=30, r=30, t=90, b=40),
+            height=int(width * 1.05),   # 🔥 MORE VERTICAL BREATHING ROOM
+            margin=dict(l=30, r=30, t=90, b=60),
             paper_bgcolor="white",
             plot_bgcolor="white"
         )
     
         return fig
+
 
 
     
