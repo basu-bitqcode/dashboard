@@ -146,24 +146,19 @@ class NewsSentimentAnalyzer:
                     # Parse datetime
                     if 'DateTime' in self.df.columns:
                         self.df['DateTime_ET'] = self.df['DateTime'].apply(self.parse_datetime)
-                        
-                        # Filter for today's news only
-                        us_now = datetime.now(ZoneInfo("America/New_York"))
-                        today = us_now.date()
-
-                        # today = datetime.now(timezone.utc).date()
+                    
+                        # Extract date from parsed datetime
                         self.df['Date'] = pd.to_datetime(self.df['DateTime_ET']).dt.date
-                        
-                        # Check if we have today's news
-                        if today in self.df['Date'].unique():
-                            self.df = self.df[self.df['Date'] == today]
-                        else:
-                            # Show most recent date's news
-                            most_recent_date = self.df['Date'].max()
-                            self.df = self.df[self.df['Date'] == most_recent_date]
-                        
+                    
+                        # 🔥 Always pick the latest available date in the DF
+                        latest_date = self.df['Date'].max()
+                    
+                        # Filter only that date
+                        self.df = self.df[self.df['Date'] == latest_date]
+                    
                         # Sort by datetime (newest first)
                         self.df = self.df.sort_values('DateTime_ET', ascending=False)
+
                     
                     return True
             return False
