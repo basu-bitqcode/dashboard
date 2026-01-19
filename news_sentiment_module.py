@@ -315,7 +315,7 @@ class NewsSentimentAnalyzer:
         # Load data
         with st.spinner("📥 Loading news data..."):
             if self.load_news_data():
-                if self.df is None and self.df.empty:
+                if self.df is None or self.df.empty:
                     st.info("📭 No news available for today.")
                     return
             else:
