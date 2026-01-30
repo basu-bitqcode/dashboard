@@ -272,6 +272,9 @@ def process_india_data(df_raw):
             .astype(float)
         )
 
+    # Force quantities to int (GLOBAL + INDIA)
+    df['buy_quantity'] = df['buy_quantity'].astype(int)
+    df['sell_quantity'] = df['sell_quantity'].astype(int)
     
     df = df.dropna(subset=['tradingsymbol'])
     df = df[df['tradingsymbol'].astype(str).str.strip() != '']
