@@ -979,6 +979,9 @@ df_india_raw = load_sheet_data(sheet_gid="649765105")
 df_india_live_pnl_raw = load_sheet_data(sheet_gid="1065660372")
 df_india_daily_pnl_raw = load_sheet_data(sheet_gid="795838620")
 
+df_india_daily_sheet2_raw = load_sheet_data(sheet_gid="1229613596")    # NEW TAB
+
+
 df_global_raw = load_sheet_data(sheet_gid="94252270")
 df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
 df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
@@ -987,6 +990,9 @@ df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
 india_data = process_india_data(df_india_raw)
 india_live_pnl_data = process_live_pnl_data(df_india_live_pnl_raw)
 india_daily_pnl_data = process_daily_pnl_data(df_india_daily_pnl_raw, region="INDIA")
+
+india_daily_sheet2_data = process_daily_pnl_data(df_india_daily_sheet2_raw, region="INDIA")    # NEW ADDED
+
 
 global_data = process_india_data(df_global_raw) if not df_global_raw.empty else {
     'open_positions': pd.DataFrame(), 'closed_positions': pd.DataFrame(), 'summary': {}
@@ -998,11 +1004,12 @@ global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="
 # 📊 Create Tabs - UPDATED WITH NEWS TAB
 # ===================================================================
 # Create 5 tabs including the new News tab
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🌍 **GLOBAL (INTRA)**", 
     "📊 **GLOBAL (DAILY)**",
     "🇮🇳 **INDIA (INTRA)**",
     "📊 **INDIA (DAILY)**",
+    "📊 **INDIA (DEMO DAILY)**",
     "📰 **NEWS & SENTIMENT**"  # New tab
 ])
 
@@ -1035,7 +1042,15 @@ with tab4:
     
     create_daily_pnl_dashboard(india_daily_pnl_data, region="INDIA")
 
-with tab5:
+with tab5:  # SECOND INDIA DAILY TAB WITH DIFFERENT SHEET
+    col1, col2 = st.columns([5, 1])
+    with col2:
+        create_refresh_button("india_daily_sheet2")
+    
+    # Use the same create_daily_pnl_dashboard function but with the different sheet data
+    create_daily_pnl_dashboard(india_daily_sheet2_data, region="INDIA")
+
+with tab6:
     # NEWS & SENTIMENT TAB
     col1, col2 = st.columns([5, 1])
     with col2:
