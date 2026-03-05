@@ -1004,7 +1004,7 @@ global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="
 # 📊 Create Tabs - UPDATED WITH NEWS TAB
 # ===================================================================
 # Create 5 tabs including the new News tab
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2 = st.tabs([
     "🌍 **GLOBAL (INTRA)**", 
     "📊 **GLOBAL (DAILY)**",
     # "🇮🇳 **INDIA (INTRA)**",
