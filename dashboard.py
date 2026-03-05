@@ -1004,12 +1004,12 @@ global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="
 # 📊 Create Tabs - UPDATED WITH NEWS TAB
 # ===================================================================
 # Create 5 tabs including the new News tab
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "🌍 **GLOBAL (INTRA)**", 
     "📊 **GLOBAL (DAILY)**",
-    "🇮🇳 **INDIA (INTRA)**",
-    "📊 **INDIA (DAILY)**",
-    "📊 **INDIA (DEMO DAILY)**",
+    # "🇮🇳 **INDIA (INTRA)**",
+    # "📊 **INDIA (DAILY)**",
+    # "📊 **INDIA (DEMO DAILY)**",
     "📰 **NEWS & SENTIMENT**"  # New tab
 ])
 
@@ -1028,29 +1028,29 @@ with tab2:
     
     create_daily_pnl_dashboard(global_daily_pnl_data, region="GLOBAL")
 
+# with tab3:
+#     col1, col2 = st.columns([5, 1])
+#     with col2:
+#         create_refresh_button("india_intra")
+    
+#     create_intraday_dashboard(india_data, india_live_pnl_data, region="INDIA")
+
+# with tab4:
+#     col1, col2 = st.columns([5, 1])
+#     with col2:
+#         create_refresh_button("india_daily")
+    
+#     create_daily_pnl_dashboard(india_daily_pnl_data, region="INDIA")
+
+# with tab5:  # SECOND INDIA DAILY TAB WITH DIFFERENT SHEET
+#     col1, col2 = st.columns([5, 1])
+#     with col2:
+#         create_refresh_button("india_daily_sheet2")
+    
+#     # Use the same create_daily_pnl_dashboard function but with the different sheet data
+#     create_daily_pnl_dashboard(india_daily_sheet2_data, region="INDIA")
+
 with tab3:
-    col1, col2 = st.columns([5, 1])
-    with col2:
-        create_refresh_button("india_intra")
-    
-    create_intraday_dashboard(india_data, india_live_pnl_data, region="INDIA")
-
-with tab4:
-    col1, col2 = st.columns([5, 1])
-    with col2:
-        create_refresh_button("india_daily")
-    
-    create_daily_pnl_dashboard(india_daily_pnl_data, region="INDIA")
-
-with tab5:  # SECOND INDIA DAILY TAB WITH DIFFERENT SHEET
-    col1, col2 = st.columns([5, 1])
-    with col2:
-        create_refresh_button("india_daily_sheet2")
-    
-    # Use the same create_daily_pnl_dashboard function but with the different sheet data
-    create_daily_pnl_dashboard(india_daily_sheet2_data, region="INDIA")
-
-with tab6:
     # NEWS & SENTIMENT TAB
     col1, col2 = st.columns([5, 1])
     with col2:
