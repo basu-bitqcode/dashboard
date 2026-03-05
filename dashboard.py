@@ -1010,7 +1010,7 @@ tab1, tab2, tab3 = st.tabs([
     # "🇮🇳 **INDIA (INTRA)**",
     # "📊 **INDIA (DAILY)**",
     # "📊 **INDIA (DEMO DAILY)**",
-    "📰 **NEWS & SENTIMENT**"  # New tab
+    # "📰 **NEWS & SENTIMENT**"  # New tab
 ])
 
 with tab1:
@@ -1050,18 +1050,18 @@ with tab2:
 #     # Use the same create_daily_pnl_dashboard function but with the different sheet data
 #     create_daily_pnl_dashboard(india_daily_sheet2_data, region="INDIA")
 
-with tab3:
-    # NEWS & SENTIMENT TAB
-    col1, col2 = st.columns([5, 1])
-    with col2:
-        create_refresh_button("news_sentiment")
+# with tab3:
+#     # NEWS & SENTIMENT TAB
+#     col1, col2 = st.columns([5, 1])
+#     with col2:
+#         create_refresh_button("news_sentiment")
     
-    # Check if news sheet URL is configured
-    if not NEWS_SHEET_URL:
-        st.warning("""
-        ⚠️ News not Updated.
-        """)
-    else:
-        # Initialize and display news sentiment dashboard
-        analyzer = NewsSentimentAnalyzer(google_sheet_url=NEWS_SHEET_URL)
-        analyzer.display_dashboard()
+#     # Check if news sheet URL is configured
+#     if not NEWS_SHEET_URL:
+#         st.warning("""
+#         ⚠️ News not Updated.
+#         """)
+#     else:
+#         # Initialize and display news sentiment dashboard
+#         analyzer = NewsSentimentAnalyzer(google_sheet_url=NEWS_SHEET_URL)
+#         analyzer.display_dashboard()
