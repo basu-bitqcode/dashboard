@@ -248,6 +248,11 @@ def process_all_pnl_data(df_raw):
     if df.empty:
         return df
     
+    # Localize to ET timezone if not already timezone-aware
+    if df['DateTime'].dt.tz is None:
+        et_tz = pytz.timezone('US/Eastern')
+        df['DateTime'] = df['DateTime'].dt.tz_localize(et_tz)
+    
     df = df.sort_values('DateTime')
     return df
 
