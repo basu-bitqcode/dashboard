@@ -382,107 +382,159 @@ def process_daily_pnl_data(df_raw, region="INDIA"):
 # ===================================================================
 # 📊 Dashboard Creation Functions
 # ===================================================================
-from datetime import datetime, date, timedelta  # Make sure timedelta is imported
-
-def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
-    """Create live P&L chart with professional time range selector"""
+def create_live_pnl_chart(live_pnl_df, currency_symbol):
+    """Create live P&L chart with color transitions"""
     if live_pnl_df.empty:
         return None
     
-    # Filter data based on selected time range
-    filtered_df = filter_data_by_time_range(live_pnl_df, time_range)
-    
-    if filtered_df.empty:
-        fig = go.Figure()
-        fig.update_layout(height=400)
-        return fig
-    
-    filtered_df_sorted = filtered_df.sort_values('DateTime')
-    highest_value = filtered_df_sorted['Total PnL'].max()
-    lowest_value = filtered_df_sorted['Total PnL'].min()
-    highest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == highest_value].iloc[0]
-    lowest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == lowest_value].iloc[0]
+    live_pnl_df_sorted = live_pnl_df.sort_values('DateTime')
+    highest_value = live_pnl_df_sorted['Total PnL'].max()
+    lowest_value = live_pnl_df_sorted['Total PnL'].min()
+    highest_row = live_pnl_df_sorted[live_pnl_df_sorted['Total PnL'] == highest_value].iloc[0]
+    lowest_row = live_pnl_df_sorted[live_pnl_df_sorted['Total PnL'] == lowest_value].iloc[0]
     
     fig = go.Figure()
+    segments = []
+    current_segment = {'x': [], 'y': [], 'color': None}
     
-    # Create smooth line with color segments
+    for i in range(len(live_pnl_df_sorted)):
+        current_val = live_pnl_df_sorted['Total PnL'].iloc[i]
+        current_time = live_pnl_df_sorted['DateTime'].iloc[i]
+        current_color = '#10B981' if current_val >= 0 else '#EF4444'
+        
+        if not current_segment['x']:
+            current_segment['x'].append(current_time)
+            current_segment['y'].append(current_val)
+            current_segment['color'] = current_color
+        elif current_segment['color'] == current_color:
+            current_segment['x'].append(current_time)
+            current_segment['y'].append(current_val)
+        else:
+            prev_val = live_pnl_df_sorted['Total PnL'].iloc[i-1]
+            prev_time = live_pnl_df_sorted['DateTime'].iloc[i-1]
+            m = (current_val - prev_val) / ((current_time - prev_time).total_seconds())
+            zero_time_seconds = -prev_val / m if m != 0 else 0
+            zero_time = prev_time + pd.Timedelta(seconds=zero_time_seconds)
+            
+            current_segment['x'].append(zero_time)
+            current_segment['y'].append(0)
+            segments.append(current_segment.copy())
+            current_segment = {
+                'x': [zero_time, current_time],
+                'y': [0, current_val],
+                'color': current_color
+            }
+    
+    if current_segment['x']:
+        segments.append(current_segment)
+    
+    for segment in segments:
+        fig.add_trace(go.Scatter(
+            x=segment['x'],
+            y=segment['y'],
+            mode='lines',
+            line=dict(shape='spline', smoothing=1.0, width=3, color=segment['color']),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+    
+    # Add invisible trace for hover
     fig.add_trace(go.Scatter(
-        x=filtered_df_sorted['DateTime'],
-        y=filtered_df_sorted['Total PnL'],
+        x=live_pnl_df_sorted['DateTime'],
+        y=live_pnl_df_sorted['Total PnL'],
         mode='lines',
-        line=dict(shape='spline', smoothing=1.3, width=2.5, color='#3B82F6'),
-        fill='tozeroy',
-        fillcolor='rgba(59, 130, 246, 0.1)',
-        hovertemplate=f'<b>%{{x|%Y-%m-%d %H:%M}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>'
+        line=dict(width=0),
+        hovertemplate=f'<b>%{{x|%H:%M:%S}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>',
+        showlegend=False,
+        name='Live P&L'
     ))
     
     # Add zero line
-    fig.add_hline(y=0, line_dash="dash", line_color="#94A3B8", line_width=1, opacity=0.5)
+    fig.add_hline(y=0, line_dash="dash", line_color="#94A3B8", line_width=1, opacity=0.3)
+    
+    # Add area fill
+    x_full = live_pnl_df_sorted['DateTime'].tolist()
+    y_full = live_pnl_df_sorted['Total PnL'].tolist()
+    
+    fig.add_trace(go.Scatter(
+        x=x_full,
+        y=y_full,
+        mode='none',
+        fill='tozeroy',
+        fillcolor='rgba(16, 185, 129, 0.1)',
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=x_full,
+        y=[min(y, 0) for y in y_full],
+        mode='none',
+        fill='tozeroy',
+        fillcolor='rgba(239, 68, 68, 0.1)',
+        showlegend=False,
+        hoverinfo='skip'
+    ))
     
     # Add extreme points
     fig.add_trace(go.Scatter(
         x=[highest_row['DateTime']],
         y=[highest_value],
-        mode='markers',
-        marker=dict(size=8, color='#10B981', symbol='triangle-up', line=dict(width=1, color='white')),
-        hovertemplate=f'<b>High: {currency_symbol}{highest_value:,.2f}</b><br>%{{x|%Y-%m-%d %H:%M}}<extra></extra>',
-        showlegend=False
+        mode='markers+text',
+        marker=dict(size=12, color='#10B981', symbol='triangle-up', line=dict(width=2, color='white')),
+        text=[f"  High: {currency_symbol}{highest_value:,.0f}"],
+        textposition="top center",
+        textfont=dict(size=11, color='#10B981', family='Arial'),
+        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        showlegend=False,
+        name='Highest'
     ))
     
     fig.add_trace(go.Scatter(
         x=[lowest_row['DateTime']],
         y=[lowest_value],
-        mode='markers',
-        marker=dict(size=8, color='#EF4444', symbol='triangle-down', line=dict(width=1, color='white')),
-        hovertemplate=f'<b>Low: {currency_symbol}{lowest_value:,.2f}</b><br>%{{x|%Y-%m-%d %H:%M}}<extra></extra>',
-        showlegend=False
+        mode='markers+text',
+        marker=dict(size=12, color='#EF4444', symbol='triangle-down', line=dict(width=2, color='white')),
+        text=[f"  Low: {currency_symbol}{lowest_value:,.0f}"],
+        textposition="bottom center",
+        textfont=dict(size=11, color='#EF4444', family='Arial'),
+        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        showlegend=False,
+        name='Lowest'
     ))
     
-    # Format x-axis based on range
-    if time_range in ["1M", "6M", "1Y", "3Y"]:
-        tickformat = '%b %d'
-        dtick = 'M1' if time_range in ["1M", "6M"] else 'M3'
-    elif time_range == "5D":
-        tickformat = '%a %H:%M'
-        dtick = None
-    else:
-        tickformat = '%H:%M'
-        dtick = None
-    
+    # Update layout
     fig.update_layout(
-        height=400,
+        height=380,
         plot_bgcolor='white',
         paper_bgcolor='white',
-        font=dict(family="Inter, system-ui", size=11),
+        font=dict(family="Inter, system-ui, sans-serif", size=12),
         hovermode='x unified',
-        margin=dict(l=40, r=40, t=30, b=30),
+        margin=dict(l=0, r=0, t=20, b=40),
         xaxis=dict(
             showgrid=False,
-            tickformat=tickformat,
+            tickformat='%H:%M',
             tickfont=dict(size=10, color='#64748B'),
-            showline=True,
             linecolor='#E2E8F0',
-            linewidth=1,
-            dtick=dtick
+            showline=True
         ),
         yaxis=dict(
             showgrid=True,
             gridcolor='#F1F5F9',
             gridwidth=1,
             tickprefix=currency_symbol,
+            tickformat=',.0f',
             tickfont=dict(size=10, color='#64748B'),
-            showline=True,
             linecolor='#E2E8F0',
-            linewidth=1,
-            zeroline=False
-        )
+            showline=True
+        ),
+        showlegend=False
     )
     
     return fig
 
-
 def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
-    """Create intraday dashboard with elegant time range selector"""
+    """Create intraday dashboard for either INDIA or GLOBAL region"""
     open_df = data_dict['open_positions']
     closed_df = data_dict['closed_positions']
     summary = data_dict['summary']
@@ -532,74 +584,12 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         formatted_time = last_datetime.strftime(f'%Y-%m-%d %H:%M:%S {timezone_str}')
         st.caption(f"📊 Last Updated: {formatted_time}")
     
-    # Display chart with elegant time selector
+    # Display live P&L chart
     if not live_pnl_df.empty:
         st.divider()
-        
-        # Initialize session state
-        range_key = f'range_{region}'
-        if range_key not in st.session_state:
-            st.session_state[range_key] = "1D"
-        
-        active = st.session_state[range_key]
-        
-        # Elegant CSS for buttons
-        st.markdown("""
-        <style>
-        .range-buttons {
-            display: flex;
-            gap: 2px;
-            background: #f8f9fa;
-            padding: 4px;
-            border-radius: 8px;
-            width: fit-content;
-            margin-bottom: 12px;
-        }
-        .range-btn {
-            padding: 4px 12px;
-            font-size: 12px;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: transparent;
-            border: none;
-            color: #64748B;
-        }
-        .range-btn.active {
-            background: #FF4B4B;
-            color: white;
-        }
-        .range-btn:hover {
-            background: #e2e8f0;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Create elegant button row
-        ranges = ["1D", "5D", "1M", "6M", "1Y", "3Y"]
-        
-        # Use HTML for cleaner buttons (no Streamlit rerun overhead)
-        button_html = '<div class="range-buttons">'
-        for r in ranges:
-            active_class = "active" if active == r else ""
-            button_html += f'<button class="range-btn {active_class}" onclick="console.log(\'{r}\')">{r}</button>'
-        button_html += '</div>'
-        
-        st.markdown(button_html, unsafe_allow_html=True)
-        
-        # Actual Streamlit buttons (hidden, but functional)
-        col_btns = st.columns([1, 1, 1, 1, 1, 1, 10])
-        for idx, r in enumerate(ranges):
-            with col_btns[idx]:
-                if st.button(r, key=f"btn_{region}_{r}", type="secondary" if active != r else "primary", use_container_width=True):
-                    st.session_state[range_key] = r
-                    st.rerun()
-        
-        # Create and display chart
-        fig = create_live_pnl_chart(live_pnl_df, currency_symbol, active)
+        fig = create_live_pnl_chart(live_pnl_df, currency_symbol)
         if fig:
-            st.plotly_chart(fig, use_container_width=True, key=f"chart_{region}")
+            st.plotly_chart(fig, use_container_width=True)
     
     # Display open positions
     if not open_df.empty:
@@ -621,6 +611,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
             'open_exposure': 'Open Exposure'
         })
         
+        # Format columns
         for col in ['Avg Price', 'Last Price', 'Unrealized P&L', 'Open Exposure']:
             open_display_df[col] = open_display_df[col].apply(format_currency_func)
         
@@ -636,6 +627,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         st.divider()
         st.subheader("📊 Closed Positions (Today)")
         
+        # Sort by P&L BEFORE any processing
         closed_df_sorted = closed_df.sort_values(by='pnl', ascending=False)
         
         closed_display_df = closed_df_sorted[[
@@ -652,6 +644,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
             'pnl': 'Realized P&L'
         })
         
+        # Format columns AFTER sorting
         for col in ['Buy Price', 'Sell Price', 'Realized P&L']:
             closed_display_df[col] = closed_display_df[col].apply(format_currency_func)
         
@@ -661,31 +654,6 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
             currency_symbol
         )
         st.markdown(table_html, unsafe_allow_html=True)
-
-
-def filter_data_by_time_range(df, time_range):
-    """Filter dataframe by selected time range"""
-    if df.empty:
-        return df
-    
-    now = datetime.now()
-    
-    if time_range == "1D":
-        start_date = now - timedelta(days=1)
-    elif time_range == "5D":
-        start_date = now - timedelta(days=5)
-    elif time_range == "1M":
-        start_date = now - timedelta(days=30)
-    elif time_range == "6M":
-        start_date = now - timedelta(days=180)
-    elif time_range == "1Y":
-        start_date = now - timedelta(days=365)
-    elif time_range == "3Y":
-        start_date = now - timedelta(days=1095)
-    else:
-        return df
-    
-    return df[df['DateTime'] >= start_date]
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
