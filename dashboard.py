@@ -781,6 +781,62 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         )
         st.markdown(table_html, unsafe_allow_html=True)
 
+# ===================================================================
+# 📊 Daily P&L Calculation from Live PnL Data
+# ===================================================================
+def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
+    """
+    Calculate Daily P&L from Live PnL data in the same format as the sheet
+    Returns DataFrame with columns: Date, Gross PnL, Charges, Net PnL, Capital
+    """
+    if live_pnl_df.empty:
+        return pd.DataFrame()
+    
+    # Make a copy and ensure datetime is timezone-aware
+    df = live_pnl_df.copy()
+    if df['DateTime'].dt.tz is None:
+        et_tz = pytz.timezone('US/Eastern')
+        df['DateTime'] = df['DateTime'].dt.tz_localize(et_tz)
+    
+    # Extract date
+    df['Date'] = df['DateTime'].dt.date
+    
+    # Group by date to get daily P&L
+    daily_data = []
+    current_capital = starting_capital
+    
+    for date, group in df.groupby('Date'):
+        group_sorted = group.sort_values('DateTime')
+        
+        # Get first P&L of the day (start of day)
+        start_pnl = group_sorted.iloc[0]['Total PnL']
+        # Get last P&L of the day (end of day)
+        end_pnl = group_sorted.iloc[-1]['Total PnL']
+        
+        # Daily MTM = End P&L - Start P&L
+        net_pnl = end_pnl - start_pnl
+        
+        # Update capital
+        current_capital += net_pnl
+        
+        daily_data.append({
+            'Date': pd.to_datetime(date),
+            'Gross PnL': net_pnl,
+            'Charges': 0,
+            'Net PnL': net_pnl,
+            'Capital': current_capital
+        })
+    
+    if not daily_data:
+        return pd.DataFrame()
+    
+    daily_df = pd.DataFrame(daily_data)
+    daily_df = daily_df.sort_values('Date', ascending=False)
+    daily_df['Date_Display'] = daily_df['Date'].dt.strftime('%Y-%m-%d')
+    daily_df['Region'] = 'GLOBAL'
+    
+    return daily_df
+
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
     if daily_pnl_df.empty:
@@ -1115,6 +1171,10 @@ df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
 df_global_all_pnl_raw = load_sheet_data(sheet_gid="1297846329")
 global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)
 
+# Calculate Daily P&L from Live PnL data instead of reading from sheet
+STARTING_CAPITAL = 100000  # You can make this a user parameter if needed
+global_daily_pnl_calculated = calculate_daily_pnl_from_live(global_all_pnl_data, STARTING_CAPITAL)
+
 # Process data
 india_data = process_india_data(df_india_raw)
 india_live_pnl_data = process_live_pnl_data(df_india_live_pnl_raw)
@@ -1126,7 +1186,6 @@ global_data = process_india_data(df_global_raw) if not df_global_raw.empty else 
     'open_positions': pd.DataFrame(), 'closed_positions': pd.DataFrame(), 'summary': {}
 }
 global_live_pnl_data = process_live_pnl_data(df_global_live_pnl_raw)
-global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="GLOBAL")
 
 # ===================================================================
 # 📊 Create Tabs
@@ -1148,4 +1207,5 @@ with tab2:
     with col2:
         create_refresh_button("global_daily")
     
-    create_daily_pnl_dashboard(global_daily_pnl_data, region="GLOBAL")
+    # Use the calculated daily P&L instead of the sheet data
+    create_daily_pnl_dashboard(global_daily_pnl_calculated, region="GLOBAL")
