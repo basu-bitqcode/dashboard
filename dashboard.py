@@ -816,19 +816,19 @@ def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
     
     # Calculate daily P&L (MTM) as difference between consecutive days
     # This shows the actual P&L change for that day
-    daily_end_pnl['Gross P&L'] = daily_end_pnl['Total PnL'].diff()
-    daily_end_pnl['Net P&L'] = daily_end_pnl['Gross P&L']
+    daily_end_pnl['Gross PnL'] = daily_end_pnl['Total PnL'].diff()
+    daily_end_pnl['Net PnL'] = daily_end_pnl['Gross PnL']
     daily_end_pnl['Charges'] = 0
     
     # First day's P&L is just the end P&L (since previous day was 0)
-    daily_end_pnl.loc[daily_end_pnl.index[0], 'Gross P&L'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
-    daily_end_pnl.loc[daily_end_pnl.index[0], 'Net P&L'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
+    daily_end_pnl.loc[daily_end_pnl.index[0], 'Gross PnL'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
+    daily_end_pnl.loc[daily_end_pnl.index[0], 'Net PnL'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
     
     # Calculate capital: starting capital + cumulative P&L
     daily_end_pnl['Capital'] = starting_capital + daily_end_pnl['Total PnL']
     
     # Prepare final dataframe
-    result_df = daily_end_pnl[['Date', 'Gross P&L', 'Charges', 'Net P&L', 'Capital']].copy()
+    result_df = daily_end_pnl[['Date', 'Gross PnL', 'Charges', 'Net PnL', 'Capital']].copy()
     
     # Convert Date to datetime for consistent formatting
     result_df['Date'] = pd.to_datetime(result_df['Date'])
