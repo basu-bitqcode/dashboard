@@ -413,8 +413,8 @@ def process_daily_pnl_data(df_raw, region="INDIA"):
 # ===================================================================
 # 📊 Dashboard Creation Functions
 # ===================================================================
-def create_live_pnl_chart(live_pnl_df, currency_symbol):
-    """Create live P&L chart with color transitions"""
+def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
+    """Create live P&L chart with color transitions and smart x-axis formatting"""
     if live_pnl_df.empty:
         return None
     
@@ -469,13 +469,13 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
             hoverinfo='skip'
         ))
     
-    # Add invisible trace for hover
+    # Add invisible trace for hover - show full datetime on hover
     fig.add_trace(go.Scatter(
         x=live_pnl_df_sorted['DateTime'],
         y=live_pnl_df_sorted['Total PnL'],
         mode='lines',
         line=dict(width=0),
-        hovertemplate=f'<b>%{{x|%H:%M:%S}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>',
+        hovertemplate=f'<b>%{{x|%Y-%m-%d %H:%M:%S}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>',
         showlegend=False,
         name='Live P&L'
     ))
@@ -516,7 +516,7 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         text=[f"  High: {currency_symbol}{highest_value:,.0f}"],
         textposition="top center",
         textfont=dict(size=11, color='#10B981', family='Arial'),
-        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Time: %{{x|%Y-%m-%d %H:%M:%S}}<extra></extra>',
         showlegend=False,
         name='Highest'
     ))
@@ -529,10 +529,46 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         text=[f"  Low: {currency_symbol}{lowest_value:,.0f}"],
         textposition="bottom center",
         textfont=dict(size=11, color='#EF4444', family='Arial'),
-        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Time: %{{x|%Y-%m-%d %H:%M:%S}}<extra></extra>',
         showlegend=False,
         name='Lowest'
     ))
+    
+    # Smart x-axis formatting - show date and time appropriately
+    if time_range in ["1D", "5D"]:
+        # For intraday views: show time, but include date at the first tick
+        tickformat = '%H:%M'
+        xaxis_title = "Time"
+        
+        # Create custom tick values that include the date at start
+        if not live_pnl_df_sorted.empty:
+            tickvals = []
+            ticktext = []
+            
+            # Get first timestamp to show date
+            first_time = live_pnl_df_sorted['DateTime'].iloc[0]
+            tickvals.append(first_time)
+            ticktext.append(first_time.strftime('%b %d, %H:%M'))
+            
+            # Add intermediate time ticks
+            if len(live_pnl_df_sorted) > 1:
+                last_time = live_pnl_df_sorted['DateTime'].iloc[-1]
+                num_ticks = 5
+                for i in range(1, num_ticks):
+                    idx = int(len(live_pnl_df_sorted) * i / num_ticks)
+                    if idx < len(live_pnl_df_sorted):
+                        tick_time = live_pnl_df_sorted['DateTime'].iloc[idx]
+                        tickvals.append(tick_time)
+                        ticktext.append(tick_time.strftime('%H:%M'))
+            
+            fig.update_xaxis(
+                tickvals=tickvals,
+                ticktext=ticktext
+            )
+    else:
+        # For longer ranges: show dates
+        tickformat = '%b %d'
+        xaxis_title = "Date"
     
     # Update layout
     fig.update_layout(
@@ -543,11 +579,12 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         hovermode='x unified',
         margin=dict(l=0, r=0, t=20, b=40),
         xaxis=dict(
+            title=xaxis_title,
             showgrid=False,
-            tickformat='%H:%M',
             tickfont=dict(size=10, color='#64748B'),
             linecolor='#E2E8F0',
-            showline=True
+            showline=True,
+            tickformat=tickformat if time_range not in ["1D", "5D"] else None
         ),
         yaxis=dict(
             showgrid=True,
