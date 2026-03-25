@@ -1006,8 +1006,8 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
             showline=True,
             zeroline=False,
             # Use Daily P&L data range for this axis
-            range=[min(daily_pnl_df_sorted['Net P&L'].min() * 1.1, 0), 
-                   max(daily_pnl_df_sorted['Net P&L'].max() * 1.1, 0)]
+            range=[min(daily_pnl_df_sorted['Net PnL'].min() * 1.1, 0), 
+                   max(daily_pnl_df_sorted['Net PnL'].max() * 1.1, 0)]
         ),
         # CAPITAL on RIGHT Y-axis (with Capital data range)
         yaxis2=dict(
