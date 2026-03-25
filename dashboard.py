@@ -1170,7 +1170,7 @@ df_global_all_pnl_raw = load_sheet_data(sheet_gid="1297846329")
 global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)
 
 # Calculate Daily P&L from Live PnL data instead of reading from sheet
-STARTING_CAPITAL = 100000  # You can make this a user parameter if needed
+STARTING_CAPITAL = 40000  # Starting capital in USD
 global_daily_pnl_calculated = calculate_daily_pnl_from_live(global_all_pnl_data, STARTING_CAPITAL)
 
 # Process data
@@ -1205,5 +1205,4 @@ with tab2:
     with col2:
         create_refresh_button("global_daily")
     
-    # Use the calculated daily P&L instead of the sheet data
     create_daily_pnl_dashboard(global_daily_pnl_calculated, region="GLOBAL")
