@@ -786,7 +786,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
 # ===================================================================
 def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
     """
-    Calculate Daily P&L from Live PnL data in the same format as the sheet
+    Calculate Daily P&L from Live PnL data
     Returns DataFrame with columns: Date, Gross PnL, Charges, Net PnL, Capital
     """
     if live_pnl_df.empty:
@@ -832,8 +832,6 @@ def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
     
     daily_df = pd.DataFrame(daily_data)
     daily_df = daily_df.sort_values('Date', ascending=False)
-    daily_df['Date_Display'] = daily_df['Date'].dt.strftime('%Y-%m-%d')
-    daily_df['Region'] = 'GLOBAL'
     
     return daily_df
 
