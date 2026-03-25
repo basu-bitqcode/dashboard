@@ -862,7 +862,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     fig = go.Figure()
     
     # DAILY P&L BARS (LEFT Y-AXIS) - MOVED THIS UP SINCE IT'S NOW ON LEFT
-    colors = ['#10B981' if val >= 0 else '#EF4444' for val in daily_pnl_df_sorted['Net P&L']]
+    colors = ['#10B981' if val >= 0 else '#EF4444' for val in daily_pnl_df_sorted['Net PnL']]
     fig.add_trace(go.Bar(
         x=daily_pnl_df_sorted['Date_Str'],
         y=daily_pnl_df_sorted['Net P&L'],
