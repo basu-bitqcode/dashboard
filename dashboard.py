@@ -865,7 +865,7 @@ def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     colors = ['#10B981' if val >= 0 else '#EF4444' for val in daily_pnl_df_sorted['Net PnL']]
     fig.add_trace(go.Bar(
         x=daily_pnl_df_sorted['Date_Str'],
-        y=daily_pnl_df_sorted['Net P&L'],
+        y=daily_pnl_df_sorted['Net PnL'],
         name='Daily P&L',
         marker_color=colors,
         opacity=0.7,
