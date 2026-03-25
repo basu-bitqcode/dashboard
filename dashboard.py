@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from news_sentiment_module import NewsSentimentAnalyzer
 
@@ -184,29 +184,6 @@ def create_html_table(df, columns, currency_symbol):
 # ===================================================================
 # 📥 Data Loading & Processing
 # ===================================================================
-@st.cache_data(ttl=REFRESH_INTERVAL_SEC)
-def process_all_pnl_data(df_raw):
-    """Process ALL Live PnL data without date filtering"""
-    if df_raw.empty:
-        return pd.DataFrame()
-    
-    df = df_raw.copy()
-    df.columns = df.columns.str.strip()
-    
-    required_cols = ['DateTime', 'Total PnL']
-    if not all(col in df.columns for col in required_cols):
-        return pd.DataFrame()
-    
-    df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
-    df['Total PnL'] = pd.to_numeric(df['Total PnL'], errors='coerce')
-    df = df.dropna(subset=['DateTime', 'Total PnL'])
-    
-    if df.empty:
-        return df
-    
-    df = df.sort_values('DateTime')
-    return df
-
 @st.cache_data(ttl=REFRESH_INTERVAL_SEC, show_spinner=False)
 def load_sheet_data(sheet_gid="0"):
     """Load specific sheet from Google Sheets using gid parameter"""
@@ -252,6 +229,53 @@ def process_live_pnl_data(df_raw):
     return df_today
 
 @st.cache_data(ttl=REFRESH_INTERVAL_SEC)
+def process_all_pnl_data(df_raw):
+    """Process ALL Live PnL data without filtering to latest date only"""
+    if df_raw.empty:
+        return pd.DataFrame()
+    
+    df = df_raw.copy()
+    df.columns = df.columns.str.strip()
+    
+    required_cols = ['DateTime', 'Total PnL']
+    if not all(col in df.columns for col in required_cols):
+        return pd.DataFrame()
+    
+    df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
+    df['Total PnL'] = pd.to_numeric(df['Total PnL'], errors='coerce')
+    df = df.dropna(subset=['DateTime', 'Total PnL'])
+    
+    if df.empty:
+        return df
+    
+    df = df.sort_values('DateTime')
+    return df
+
+def filter_data_by_time_range(df, time_range):
+    """Filter dataframe by selected time range"""
+    if df.empty:
+        return df
+    
+    now = datetime.now()
+    
+    if time_range == "1D":
+        start_date = now - timedelta(days=1)
+    elif time_range == "5D":
+        start_date = now - timedelta(days=5)
+    elif time_range == "1M":
+        start_date = now - timedelta(days=30)
+    elif time_range == "6M":
+        start_date = now - timedelta(days=180)
+    elif time_range == "1Y":
+        start_date = now - timedelta(days=365)
+    elif time_range == "3Y":
+        start_date = now - timedelta(days=1095)
+    else:
+        return df
+    
+    return df[df['DateTime'] >= start_date]
+
+@st.cache_data(ttl=REFRESH_INTERVAL_SEC)
 def process_india_data(df_raw):
     """Process INDIA data with the new format"""
     if df_raw.empty:
@@ -280,8 +304,6 @@ def process_india_data(df_raw):
     
     numeric_cols = ['buy_value', 'buy_price', 'buy_quantity', 'sell_quantity', 
                    'sell_price', 'sell_value', 'last_price', 'pnl']
-    # for col in numeric_cols:
-    #     df[col] = pd.to_numeric(df[col], errors='coerce')
 
     for col in numeric_cols:
         df[col] = (
@@ -306,7 +328,7 @@ def process_india_data(df_raw):
     closed_mask = (df['buy_quantity'] > 0) & (df['sell_quantity'] > 0) & (df['buy_quantity'] == df['sell_quantity'])
     closed_df = df[closed_mask].copy()
     
-    closed_df['pnl'] = (closed_df['sell_price'] - closed_df['buy_price']) * closed_df['sell_quantity']    # NEW CHANGE
+    closed_df['pnl'] = (closed_df['sell_price'] - closed_df['buy_price']) * closed_df['sell_quantity']
     
     open_mask = ~closed_mask
     open_df = df[open_mask].copy()
@@ -321,20 +343,6 @@ def process_india_data(df_raw):
             0
         )
         
-        # open_df['avg_price'] = np.where(
-        #     open_df['net_quantity'] == 0,
-        #     0,
-        #     np.where(
-        #         open_df['sell_quantity'] == 0,
-        #         open_df['buy_price'],
-        #         np.where(
-        #             open_df['buy_quantity'] == 0,
-        #             open_df['sell_price'],
-        #             (open_df['buy_value'] - open_df['sell_value']) / open_df['net_quantity']
-        #         )
-        #     )
-        # )
-
         open_df['unrealized_pnl'] = (open_df['last_price'] - open_df['avg_price']) * open_df['net_quantity']
         open_df['open_exposure'] = open_df['net_quantity'] * open_df['last_price']
         open_df['position_type'] = open_df['net_quantity'].apply(lambda x: 'Long' if x > 0 else 'Short' if x < 0 else 'Flat')
@@ -648,10 +656,8 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
                 st.session_state[f'time_range_{region}'] = "3Y"
                 st.rerun()
         
-        # Get selected time range
+        # Get selected time range and filter data
         selected_range = st.session_state[f'time_range_{region}']
-        
-        # Filter data based on selected time range
         filtered_pnl_df = filter_data_by_time_range(live_pnl_df, selected_range)
         
         # Create chart with filtered data
@@ -722,31 +728,6 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
             currency_symbol
         )
         st.markdown(table_html, unsafe_allow_html=True)
-
-
-def filter_data_by_time_range(df, time_range):
-    """Filter dataframe by selected time range"""
-    if df.empty:
-        return df
-    
-    now = datetime.now()
-    
-    if time_range == "1D":
-        start_date = now - timedelta(days=1)
-    elif time_range == "5D":
-        start_date = now - timedelta(days=5)
-    elif time_range == "1M":
-        start_date = now - timedelta(days=30)
-    elif time_range == "6M":
-        start_date = now - timedelta(days=180)
-    elif time_range == "1Y":
-        start_date = now - timedelta(days=365)
-    elif time_range == "3Y":
-        start_date = now - timedelta(days=1095)
-    else:
-        return df
-    
-    return df[df['DateTime'] >= start_date]
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
@@ -1066,29 +1047,28 @@ def create_refresh_button(key_suffix):
         st.rerun()
 
 # ===================================================================
-# 📥 Load Data (Keep all your existing data loading)
+# 📥 Load Data
 # ===================================================================
 df_india_raw = load_sheet_data(sheet_gid="649765105")
 df_india_live_pnl_raw = load_sheet_data(sheet_gid="1065660372")
 df_india_daily_pnl_raw = load_sheet_data(sheet_gid="795838620")
 
-df_india_daily_sheet2_raw = load_sheet_data(sheet_gid="1229613596")    # NEW TAB
+df_india_daily_sheet2_raw = load_sheet_data(sheet_gid="1229613596")
+
+df_global_raw = load_sheet_data(sheet_gid="94252270")
+df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
+df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
 
 # Load ALL historical data for GLOBAL intraday
 df_global_all_pnl_raw = load_sheet_data(sheet_gid="1297846329")
-global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)  # Use this for the chart
-
-# df_global_raw = load_sheet_data(sheet_gid="94252270")
-# df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
-# df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
+global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)
 
 # Process data
 india_data = process_india_data(df_india_raw)
 india_live_pnl_data = process_live_pnl_data(df_india_live_pnl_raw)
 india_daily_pnl_data = process_daily_pnl_data(df_india_daily_pnl_raw, region="INDIA")
 
-india_daily_sheet2_data = process_daily_pnl_data(df_india_daily_sheet2_raw, region="INDIA")    # NEW ADDED
-
+india_daily_sheet2_data = process_daily_pnl_data(df_india_daily_sheet2_raw, region="INDIA")
 
 global_data = process_india_data(df_global_raw) if not df_global_raw.empty else {
     'open_positions': pd.DataFrame(), 'closed_positions': pd.DataFrame(), 'summary': {}
@@ -1097,16 +1077,11 @@ global_live_pnl_data = process_live_pnl_data(df_global_live_pnl_raw)
 global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="GLOBAL")
 
 # ===================================================================
-# 📊 Create Tabs - UPDATED WITH NEWS TAB
+# 📊 Create Tabs
 # ===================================================================
-# Create 5 tabs including the new News tab
 tab1, tab2 = st.tabs([
     "🌍 **GLOBAL FUTURES (INTRA)**", 
     "📊 **GLOBAL FUTURES (DAILY)**",
-    # "🇮🇳 **INDIA (INTRA)**",
-    # "📊 **INDIA (DAILY)**",
-    # "📊 **INDIA (DEMO DAILY)**",
-    # "📰 **NEWS & SENTIMENT**"  # New tab
 ])
 
 with tab1:
@@ -1122,41 +1097,3 @@ with tab2:
         create_refresh_button("global_daily")
     
     create_daily_pnl_dashboard(global_daily_pnl_data, region="GLOBAL")
-
-# with tab3:
-#     col1, col2 = st.columns([5, 1])
-#     with col2:
-#         create_refresh_button("india_intra")
-    
-#     create_intraday_dashboard(india_data, india_live_pnl_data, region="INDIA")
-
-# with tab4:
-#     col1, col2 = st.columns([5, 1])
-#     with col2:
-#         create_refresh_button("india_daily")
-    
-#     create_daily_pnl_dashboard(india_daily_pnl_data, region="INDIA")
-
-# with tab5:  # SECOND INDIA DAILY TAB WITH DIFFERENT SHEET
-#     col1, col2 = st.columns([5, 1])
-#     with col2:
-#         create_refresh_button("india_daily_sheet2")
-    
-#     # Use the same create_daily_pnl_dashboard function but with the different sheet data
-#     create_daily_pnl_dashboard(india_daily_sheet2_data, region="INDIA")
-
-# with tab3:
-#     # NEWS & SENTIMENT TAB
-#     col1, col2 = st.columns([5, 1])
-#     with col2:
-#         create_refresh_button("news_sentiment")
-    
-#     # Check if news sheet URL is configured
-#     if not NEWS_SHEET_URL:
-#         st.warning("""
-#         ⚠️ News not Updated.
-#         """)
-#     else:
-#         # Initialize and display news sentiment dashboard
-#         analyzer = NewsSentimentAnalyzer(google_sheet_url=NEWS_SHEET_URL)
-#         analyzer.display_dashboard()
