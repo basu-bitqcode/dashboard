@@ -1045,7 +1045,7 @@ def create_daily_pnl_dashboard(daily_pnl_df, region="INDIA"):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_gross = daily_pnl_df['Gross P&L'].sum()
+        total_gross = daily_pnl_df['Gross PnL'].sum()
         gross_color = "#2ca02c" if total_gross >= 0 else "#d62728"
         st.markdown(create_metric_card("Total Gross P&L", format_currency_func(total_gross), gross_color), unsafe_allow_html=True)
     
@@ -1054,7 +1054,7 @@ def create_daily_pnl_dashboard(daily_pnl_df, region="INDIA"):
         st.markdown(create_metric_card("Total Charges", format_currency_func(total_charges), "#d62728"), unsafe_allow_html=True)
     
     with col3:
-        total_net = daily_pnl_df['Net P&L'].sum()
+        total_net = daily_pnl_df['Net PnL'].sum()
         net_color = "#10B981" if total_net >= 0 else "#EF4444"
         st.markdown(create_metric_card("Total Net P&L", format_currency_func(total_net), net_color), unsafe_allow_html=True)
     
