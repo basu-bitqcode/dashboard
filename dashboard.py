@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from news_sentiment_module import NewsSentimentAnalyzer
 
@@ -229,6 +229,29 @@ def process_live_pnl_data(df_raw):
     return df_today
 
 @st.cache_data(ttl=REFRESH_INTERVAL_SEC)
+def process_all_pnl_data(df_raw):
+    """Process ALL Live PnL data without date filtering"""
+    if df_raw.empty:
+        return pd.DataFrame()
+    
+    df = df_raw.copy()
+    df.columns = df.columns.str.strip()
+    
+    required_cols = ['DateTime', 'Total PnL']
+    if not all(col in df.columns for col in required_cols):
+        return pd.DataFrame()
+    
+    df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
+    df['Total PnL'] = pd.to_numeric(df['Total PnL'], errors='coerce')
+    df = df.dropna(subset=['DateTime', 'Total PnL'])
+    
+    if df.empty:
+        return df
+    
+    df = df.sort_values('DateTime')
+    return df
+
+@st.cache_data(ttl=REFRESH_INTERVAL_SEC)
 def process_india_data(df_raw):
     """Process INDIA data with the new format"""
     if df_raw.empty:
@@ -382,24 +405,50 @@ def process_daily_pnl_data(df_raw, region="INDIA"):
 # ===================================================================
 # 📊 Dashboard Creation Functions
 # ===================================================================
-def create_live_pnl_chart(live_pnl_df, currency_symbol):
-    """Create live P&L chart with color transitions"""
+def filter_data_by_time_range(df, time_range):
+    """Filter dataframe by selected time range"""
+    if df.empty:
+        return df
+    
+    now = datetime.now()
+    
+    if time_range == "1D":
+        start_date = now - timedelta(days=1)
+    elif time_range == "5D":
+        start_date = now - timedelta(days=5)
+    elif time_range == "1M":
+        start_date = now - timedelta(days=30)
+    elif time_range == "1Y":
+        start_date = now - timedelta(days=365)
+    else:
+        return df
+    
+    return df[df['DateTime'] >= start_date]
+
+def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
+    """Create live P&L chart with color transitions and time range filtering"""
     if live_pnl_df.empty:
         return None
     
-    live_pnl_df_sorted = live_pnl_df.sort_values('DateTime')
-    highest_value = live_pnl_df_sorted['Total PnL'].max()
-    lowest_value = live_pnl_df_sorted['Total PnL'].min()
-    highest_row = live_pnl_df_sorted[live_pnl_df_sorted['Total PnL'] == highest_value].iloc[0]
-    lowest_row = live_pnl_df_sorted[live_pnl_df_sorted['Total PnL'] == lowest_value].iloc[0]
+    # Filter data based on selected time range
+    filtered_df = filter_data_by_time_range(live_pnl_df, time_range)
+    
+    if filtered_df.empty:
+        return None
+    
+    filtered_df_sorted = filtered_df.sort_values('DateTime')
+    highest_value = filtered_df_sorted['Total PnL'].max()
+    lowest_value = filtered_df_sorted['Total PnL'].min()
+    highest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == highest_value].iloc[0]
+    lowest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == lowest_value].iloc[0]
     
     fig = go.Figure()
     segments = []
     current_segment = {'x': [], 'y': [], 'color': None}
     
-    for i in range(len(live_pnl_df_sorted)):
-        current_val = live_pnl_df_sorted['Total PnL'].iloc[i]
-        current_time = live_pnl_df_sorted['DateTime'].iloc[i]
+    for i in range(len(filtered_df_sorted)):
+        current_val = filtered_df_sorted['Total PnL'].iloc[i]
+        current_time = filtered_df_sorted['DateTime'].iloc[i]
         current_color = '#10B981' if current_val >= 0 else '#EF4444'
         
         if not current_segment['x']:
@@ -410,8 +459,8 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
             current_segment['x'].append(current_time)
             current_segment['y'].append(current_val)
         else:
-            prev_val = live_pnl_df_sorted['Total PnL'].iloc[i-1]
-            prev_time = live_pnl_df_sorted['DateTime'].iloc[i-1]
+            prev_val = filtered_df_sorted['Total PnL'].iloc[i-1]
+            prev_time = filtered_df_sorted['DateTime'].iloc[i-1]
             m = (current_val - prev_val) / ((current_time - prev_time).total_seconds())
             zero_time_seconds = -prev_val / m if m != 0 else 0
             zero_time = prev_time + pd.Timedelta(seconds=zero_time_seconds)
@@ -440,11 +489,11 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
     
     # Add invisible trace for hover
     fig.add_trace(go.Scatter(
-        x=live_pnl_df_sorted['DateTime'],
-        y=live_pnl_df_sorted['Total PnL'],
+        x=filtered_df_sorted['DateTime'],
+        y=filtered_df_sorted['Total PnL'],
         mode='lines',
         line=dict(width=0),
-        hovertemplate=f'<b>%{{x|%H:%M:%S}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>',
+        hovertemplate=f'<b>%{{x|%Y-%m-%d %H:%M:%S}}</b><br>{currency_symbol}%{{y:,.2f}}<extra></extra>',
         showlegend=False,
         name='Live P&L'
     ))
@@ -453,8 +502,8 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
     fig.add_hline(y=0, line_dash="dash", line_color="#94A3B8", line_width=1, opacity=0.3)
     
     # Add area fill
-    x_full = live_pnl_df_sorted['DateTime'].tolist()
-    y_full = live_pnl_df_sorted['Total PnL'].tolist()
+    x_full = filtered_df_sorted['DateTime'].tolist()
+    y_full = filtered_df_sorted['Total PnL'].tolist()
     
     fig.add_trace(go.Scatter(
         x=x_full,
@@ -485,7 +534,7 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         text=[f"  High: {currency_symbol}{highest_value:,.0f}"],
         textposition="top center",
         textfont=dict(size=11, color='#10B981', family='Arial'),
-        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        hovertemplate=f'<b>Highest: {currency_symbol}{highest_value:,.2f}</b><br>Time: %{{x|%Y-%m-%d %H:%M:%S}}<extra></extra>',
         showlegend=False,
         name='Highest'
     ))
@@ -498,12 +547,20 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         text=[f"  Low: {currency_symbol}{lowest_value:,.0f}"],
         textposition="bottom center",
         textfont=dict(size=11, color='#EF4444', family='Arial'),
-        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Time: %{{x|%H:%M:%S}}<extra></extra>',
+        hovertemplate=f'<b>Lowest: {currency_symbol}{lowest_value:,.2f}</b><br>Time: %{{x|%Y-%m-%d %H:%M:%S}}<extra></extra>',
         showlegend=False,
         name='Lowest'
     ))
     
-    # Update layout
+    # Update layout with dynamic x-axis formatting based on time range
+    xaxis_title = "Time"
+    if time_range in ["1M", "1Y"]:
+        tickformat = '%Y-%m-%d'
+    elif time_range == "5D":
+        tickformat = '%m-%d %H:%M'
+    else:
+        tickformat = '%H:%M'
+    
     fig.update_layout(
         height=380,
         plot_bgcolor='white',
@@ -512,13 +569,15 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
         hovermode='x unified',
         margin=dict(l=0, r=0, t=20, b=40),
         xaxis=dict(
+            title=xaxis_title,
             showgrid=False,
-            tickformat='%H:%M',
+            tickformat=tickformat,
             tickfont=dict(size=10, color='#64748B'),
             linecolor='#E2E8F0',
             showline=True
         ),
         yaxis=dict(
+            title=f"Total P&L ({currency_symbol})",
             showgrid=True,
             gridcolor='#F1F5F9',
             gridwidth=1,
@@ -534,7 +593,7 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol):
     return fig
 
 def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
-    """Create intraday dashboard for either INDIA or GLOBAL region"""
+    """Create intraday dashboard for either INDIA or GLOBAL region with time range selector"""
     open_df = data_dict['open_positions']
     closed_df = data_dict['closed_positions']
     summary = data_dict['summary']
@@ -584,12 +643,63 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         formatted_time = last_datetime.strftime(f'%Y-%m-%d %H:%M:%S {timezone_str}')
         st.caption(f"📊 Last Updated: {formatted_time}")
     
-    # Display live P&L chart
+    # Display live P&L chart with time range selector
     if not live_pnl_df.empty:
         st.divider()
-        fig = create_live_pnl_chart(live_pnl_df, currency_symbol)
+        
+        # Create time range selector buttons
+        st.markdown("### 📈 P&L Chart")
+        
+        # Use columns for time range buttons
+        col_buttons = st.columns([1, 1, 1, 1, 6])
+        
+        # Initialize session state for time range if not exists
+        if f'time_range_{region}' not in st.session_state:
+            st.session_state[f'time_range_{region}'] = "1D"
+        
+        # Create buttons with custom styling
+        time_ranges = ["1D", "5D", "1M", "1Y"]
+        
+        with col_buttons[0]:
+            if st.button("📅 1D", key=f"btn_1d_{region}", use_container_width=True):
+                st.session_state[f'time_range_{region}'] = "1D"
+                st.rerun()
+        
+        with col_buttons[1]:
+            if st.button("📊 5D", key=f"btn_5d_{region}", use_container_width=True):
+                st.session_state[f'time_range_{region}'] = "5D"
+                st.rerun()
+        
+        with col_buttons[2]:
+            if st.button("📈 1M", key=f"btn_1m_{region}", use_container_width=True):
+                st.session_state[f'time_range_{region}'] = "1M"
+                st.rerun()
+        
+        with col_buttons[3]:
+            if st.button("📉 1Y", key=f"btn_1y_{region}", use_container_width=True):
+                st.session_state[f'time_range_{region}'] = "1Y"
+                st.rerun()
+        
+        # Highlight active button
+        active_range = st.session_state[f'time_range_{region}']
+        
+        # Add CSS for button highlighting
+        st.markdown(f"""
+        <style>
+        div[data-testid="column"] button[kind="secondary"] {{
+            background-color: {'#FF4B4B' if active_range == '1D' else '#f0f2f6'};
+            color: {'white' if active_range == '1D' else '#31333F'};
+            font-weight: bold;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Create chart with selected time range
+        fig = create_live_pnl_chart(live_pnl_df, currency_symbol, active_range)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info(f"ℹ️ No data available for the selected time range ({active_range})")
     
     # Display open positions
     if not open_df.empty:
@@ -986,6 +1096,9 @@ df_global_raw = load_sheet_data(sheet_gid="94252270")
 df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
 df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
 
+# Load ALL historical data for GLOBAL intraday (without date filtering)
+df_global_all_pnl_raw = load_sheet_data(sheet_gid="1297846329")  # Same sheet but processed differently
+
 # Process data
 india_data = process_india_data(df_india_raw)
 india_live_pnl_data = process_live_pnl_data(df_india_live_pnl_raw)
@@ -993,11 +1106,12 @@ india_daily_pnl_data = process_daily_pnl_data(df_india_daily_pnl_raw, region="IN
 
 india_daily_sheet2_data = process_daily_pnl_data(df_india_daily_sheet2_raw, region="INDIA")    # NEW ADDED
 
-
 global_data = process_india_data(df_global_raw) if not df_global_raw.empty else {
     'open_positions': pd.DataFrame(), 'closed_positions': pd.DataFrame(), 'summary': {}
 }
-global_live_pnl_data = process_live_pnl_data(df_global_live_pnl_raw)
+# Process ALL historical data for GLOBAL intraday (without filtering to today only)
+global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)  # NEW: Use this for the chart
+global_live_pnl_data = process_live_pnl_data(df_global_live_pnl_raw)  # Keep for other metrics
 global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="GLOBAL")
 
 # ===================================================================
@@ -1019,7 +1133,8 @@ with tab1:
     with col2:
         create_refresh_button("global_intra")
     
-    create_intraday_dashboard(global_data, global_live_pnl_data, region="GLOBAL")
+    # Use the ALL historical data for the chart
+    create_intraday_dashboard(global_data, global_all_pnl_data, region="GLOBAL")
 
 with tab2:
     col1, col2 = st.columns([5, 1])
