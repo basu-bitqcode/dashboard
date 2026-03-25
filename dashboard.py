@@ -534,11 +534,18 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
         name='Lowest'
     ))
     
-    # Smart x-axis formatting - show date and time appropriately
+    # Setup x-axis configuration
+    xaxis_config = {
+        'showgrid': False,
+        'tickfont': dict(size=10, color='#64748B'),
+        'linecolor': '#E2E8F0',
+        'showline': True
+    }
+    
+    # Smart x-axis formatting based on time range
     if time_range in ["1D", "5D"]:
         # For intraday views: show time, but include date at the first tick
-        tickformat = '%H:%M'
-        xaxis_title = "Time"
+        xaxis_config['title'] = "Time"
         
         # Create custom tick values that include the date at start
         if not live_pnl_df_sorted.empty:
@@ -561,16 +568,14 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
                         tickvals.append(tick_time)
                         ticktext.append(tick_time.strftime('%H:%M'))
             
-            fig.update_xaxis(
-                tickvals=tickvals,
-                ticktext=ticktext
-            )
+            xaxis_config['tickvals'] = tickvals
+            xaxis_config['ticktext'] = ticktext
     else:
         # For longer ranges: show dates
-        tickformat = '%b %d'
-        xaxis_title = "Date"
+        xaxis_config['title'] = "Date"
+        xaxis_config['tickformat'] = '%b %d'
     
-    # Update layout
+    # Update layout with xaxis configuration
     fig.update_layout(
         height=380,
         plot_bgcolor='white',
@@ -578,14 +583,7 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
         font=dict(family="Inter, system-ui, sans-serif", size=12),
         hovermode='x unified',
         margin=dict(l=0, r=0, t=20, b=40),
-        xaxis=dict(
-            title=xaxis_title,
-            showgrid=False,
-            tickfont=dict(size=10, color='#64748B'),
-            linecolor='#E2E8F0',
-            showline=True,
-            tickformat=tickformat if time_range not in ["1D", "5D"] else None
-        ),
+        xaxis=xaxis_config,
         yaxis=dict(
             showgrid=True,
             gridcolor='#F1F5F9',
@@ -698,7 +696,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         filtered_pnl_df = filter_data_by_time_range(live_pnl_df, selected_range)
         
         # Create chart with filtered data
-        fig = create_live_pnl_chart(filtered_pnl_df, currency_symbol)
+        fig = create_live_pnl_chart(filtered_pnl_df, currency_symbol, selected_range)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
     
