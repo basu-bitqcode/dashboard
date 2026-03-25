@@ -256,7 +256,9 @@ def filter_data_by_time_range(df, time_range):
     if df.empty:
         return df
     
-    now = datetime.now()
+    # Use ET timezone for GLOBAL data
+    et_tz = pytz.timezone('US/Eastern')
+    now_et = datetime.now(et_tz)
     
     if time_range == "1D":
         start_date = now - timedelta(days=1)
