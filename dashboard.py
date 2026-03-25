@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import pytz
 from news_sentiment_module import NewsSentimentAnalyzer
 
@@ -382,194 +382,36 @@ def process_daily_pnl_data(df_raw, region="INDIA"):
 # ===================================================================
 # 📊 Dashboard Creation Functions
 # ===================================================================
-def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
-    """Create intraday dashboard for either INDIA or GLOBAL region with time range selector"""
-    open_df = data_dict['open_positions']
-    closed_df = data_dict['closed_positions']
-    summary = data_dict['summary']
+from datetime import datetime, date, timedelta  # Make sure timedelta is imported
+
+def filter_data_by_time_range(df, time_range):
+    """Filter dataframe by selected time range"""
+    if df.empty:
+        return df
     
-    if open_df.empty and closed_df.empty:
-        st.info(f"📭 NO ACTIVE POSITIONS.")
-        return
+    now = datetime.now()
     
-    format_currency_func = get_currency_formatter(region)
-    currency_symbol = get_currency_symbol(region)
+    if time_range == "1D":
+        start_date = now - timedelta(days=1)
+    elif time_range == "5D":
+        start_date = now - timedelta(days=5)
+    elif time_range == "1M":
+        start_date = now - timedelta(days=30)
+    elif time_range == "6M":
+        start_date = now - timedelta(days=180)
+    elif time_range == "1Y":
+        start_date = now - timedelta(days=365)
+    else:
+        return df
     
-    # Display total P&L
-    total_pnl = summary.get('total_pnl', 0)
-    pnl_color = "green" if total_pnl > 0 else "red" if total_pnl < 0 else "gray"
+    # Debug: Print date range for verification
+    print(f"Filtering for {time_range}: from {start_date} to {now}")
+    print(f"Original data range: {df['DateTime'].min()} to {df['DateTime'].max()}")
     
-    st.markdown(
-        f"""
-        <div style="text-align: center; margin-bottom: 1.2rem;">
-            <span style="font-size: 2.4rem; font-weight: 800; color: {pnl_color};">
-                {format_currency_func(total_pnl)}
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    filtered = df[df['DateTime'] >= start_date]
+    print(f"Filtered data points: {len(filtered)} out of {len(df)}")
     
-    # Display key metrics
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        st.markdown(create_metric_card("Closed P&L", format_currency_func(summary.get('total_closed_pnl', 0)), "#1f77b4"), unsafe_allow_html=True)
-    with col2:
-        st.markdown(create_metric_card("Unrealized P&L", format_currency_func(summary.get('total_unrealized_pnl', 0)), "#ff7f0e"), unsafe_allow_html=True)
-    with col3:
-        st.markdown(create_metric_card("Traded Volume", format_currency_func(summary.get('total_traded_volume', 0)), "#2ca02c"), unsafe_allow_html=True)
-    with col4:
-        st.markdown(create_metric_card("Open Exposure", format_currency_func(summary.get('total_open_exposure', 0)), "#d62728"), unsafe_allow_html=True)
-    with col5:
-        st.markdown(create_metric_card("Open Positions", summary.get('open_positions_count', 0), "#9467bd"), unsafe_allow_html=True)
-    with col6:
-        st.markdown(create_metric_card("Closed Positions", summary.get('closed_positions_count', 0), "#8c564b"), unsafe_allow_html=True)
-    
-    # Show last updated time
-    if not live_pnl_df.empty and 'DateTime' in live_pnl_df.columns:
-        last_datetime = live_pnl_df['DateTime'].iloc[-1]
-        timezone_str = "IST" if region == "INDIA" else "ET"
-        formatted_time = last_datetime.strftime(f'%Y-%m-%d %H:%M:%S {timezone_str}')
-        st.caption(f"📊 Last Updated: {formatted_time}")
-    
-    # Display live P&L chart with compact time range selector
-    if not live_pnl_df.empty:
-        st.divider()
-        
-        # Initialize session state for time range if not exists
-        if f'time_range_{region}' not in st.session_state:
-            st.session_state[f'time_range_{region}'] = "1D"
-        
-        active_range = st.session_state[f'time_range_{region}']
-        
-        # Create compact inline time range selector
-        st.markdown("""
-        <style>
-        /* Compact button styling */
-        .time-range-container {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 12px;
-            padding: 0;
-        }
-        .time-range-btn {
-            background: #f0f2f6;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            padding: 4px 12px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: #31333F;
-        }
-        .time-range-btn.active {
-            background: #FF4B4B;
-            border-color: #FF4B4B;
-            color: white;
-        }
-        .time-range-btn:hover {
-            background: #e0e0e0;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Create button row using st.columns for compact layout
-        time_ranges = [
-            {"label": "1D", "value": "1D", "width": 1},
-            {"label": "5D", "value": "5D", "width": 1},
-            {"label": "1M", "value": "1M", "width": 1},
-            {"label": "6M", "value": "6M", "width": 1},
-            {"label": "1Y", "value": "1Y", "width": 1}
-        ]
-        
-        # Create columns for buttons
-        button_cols = st.columns([r["width"] for r in time_ranges] + [6])
-        
-        # Render buttons
-        for idx, tr in enumerate(time_ranges):
-            with button_cols[idx]:
-                button_type = "primary" if active_range == tr["value"] else "secondary"
-                if st.button(
-                    tr["label"], 
-                    key=f"time_btn_{region}_{tr['value']}", 
-                    type=button_type,
-                    use_container_width=True
-                ):
-                    st.session_state[f'time_range_{region}'] = tr["value"]
-                    st.rerun()
-        
-        # Create and display chart
-        fig = create_live_pnl_chart(live_pnl_df, currency_symbol, active_range)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True, key=f"pnl_chart_{region}")
-        else:
-            st.info(f"ℹ️ No data available for the selected time range ({active_range})")
-    
-    # Display open positions
-    if not open_df.empty:
-        st.divider()
-        st.subheader("📈 Open Positions")
-        
-        open_display_df = open_df[[
-            'tradingsymbol', 'position_type', 'net_quantity',
-            'avg_price', 'last_price', 'unrealized_pnl', 'open_exposure'
-        ]].copy()
-        
-        open_display_df = open_display_df.rename(columns={
-            'tradingsymbol': 'Symbol',
-            'position_type': 'Position',
-            'net_quantity': 'Quantity',
-            'avg_price': 'Avg Price',
-            'last_price': 'Last Price',
-            'unrealized_pnl': 'Unrealized P&L',
-            'open_exposure': 'Open Exposure'
-        })
-        
-        # Format columns
-        for col in ['Avg Price', 'Last Price', 'Unrealized P&L', 'Open Exposure']:
-            open_display_df[col] = open_display_df[col].apply(format_currency_func)
-        
-        table_html = create_html_table(
-            open_display_df,
-            ['Symbol', 'Position', 'Quantity', 'Avg Price', 'Last Price', 'Unrealized P&L', 'Open Exposure'],
-            currency_symbol
-        )
-        st.markdown(table_html, unsafe_allow_html=True)
-    
-    # Display closed positions
-    if not closed_df.empty:
-        st.divider()
-        st.subheader("📊 Closed Positions (Today)")
-        
-        # Sort by P&L BEFORE any processing
-        closed_df_sorted = closed_df.sort_values(by='pnl', ascending=False)
-        
-        closed_display_df = closed_df_sorted[[
-            'tradingsymbol', 'buy_quantity', 'buy_price',
-            'sell_quantity', 'sell_price', 'pnl'
-        ]].copy()
-        
-        closed_display_df = closed_display_df.rename(columns={
-            'tradingsymbol': 'Symbol',
-            'buy_quantity': 'Buy Qty',
-            'buy_price': 'Buy Price',
-            'sell_quantity': 'Sell Qty',
-            'sell_price': 'Sell Price',
-            'pnl': 'Realized P&L'
-        })
-        
-        # Format columns AFTER sorting
-        for col in ['Buy Price', 'Sell Price', 'Realized P&L']:
-            closed_display_df[col] = closed_display_df[col].apply(format_currency_func)
-        
-        table_html = create_html_table(
-            closed_display_df,
-            ['Symbol', 'Buy Qty', 'Buy Price', 'Sell Qty', 'Sell Price', 'Realized P&L'],
-            currency_symbol
-        )
-        st.markdown(table_html, unsafe_allow_html=True)
+    return filtered
 
 
 def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
@@ -581,11 +423,23 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
     filtered_df = filter_data_by_time_range(live_pnl_df, time_range)
     
     if filtered_df.empty:
-        return None
+        # Create empty chart with message
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"No data available for {time_range} period",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=14, color="gray")
+        )
+        fig.update_layout(height=380)
+        return fig
     
     filtered_df_sorted = filtered_df.sort_values('DateTime')
     highest_value = filtered_df_sorted['Total PnL'].max()
     lowest_value = filtered_df_sorted['Total PnL'].min()
+    
+    # Get rows for extremes
     highest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == highest_value].iloc[0]
     lowest_row = filtered_df_sorted[filtered_df_sorted['Total PnL'] == lowest_value].iloc[0]
     
@@ -652,22 +506,13 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
     x_full = filtered_df_sorted['DateTime'].tolist()
     y_full = filtered_df_sorted['Total PnL'].tolist()
     
+    # Separate positive and negative areas for fill
     fig.add_trace(go.Scatter(
         x=x_full,
         y=y_full,
         mode='none',
         fill='tozeroy',
         fillcolor='rgba(16, 185, 129, 0.1)',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=x_full,
-        y=[min(y, 0) for y in y_full],
-        mode='none',
-        fill='tozeroy',
-        fillcolor='rgba(239, 68, 68, 0.1)',
         showlegend=False,
         hoverinfo='skip'
     ))
@@ -702,13 +547,13 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
     # Determine x-axis formatting based on time range
     if time_range in ["1M", "6M", "1Y"]:
         tickformat = '%Y-%m-%d'
+        xaxis_title = "Date"
     elif time_range == "5D":
         tickformat = '%m-%d %H:%M'
+        xaxis_title = "Date & Time"
     else:
         tickformat = '%H:%M'
-    
-    # Set x-axis title based on range
-    xaxis_title = "Time" if time_range in ["1D", "5D"] else "Date"
+        xaxis_title = "Time"
     
     fig.update_layout(
         height=420,
@@ -742,27 +587,177 @@ def create_live_pnl_chart(live_pnl_df, currency_symbol, time_range="1D"):
     return fig
 
 
-def filter_data_by_time_range(df, time_range):
-    """Filter dataframe by selected time range"""
-    if df.empty:
-        return df
+def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
+    """Create intraday dashboard for either INDIA or GLOBAL region with time range selector"""
+    open_df = data_dict['open_positions']
+    closed_df = data_dict['closed_positions']
+    summary = data_dict['summary']
     
-    now = datetime.now()
+    if open_df.empty and closed_df.empty:
+        st.info(f"📭 NO ACTIVE POSITIONS.")
+        return
     
-    if time_range == "1D":
-        start_date = now - timedelta(days=1)
-    elif time_range == "5D":
-        start_date = now - timedelta(days=5)
-    elif time_range == "1M":
-        start_date = now - timedelta(days=30)
-    elif time_range == "6M":
-        start_date = now - timedelta(days=180)
-    elif time_range == "1Y":
-        start_date = now - timedelta(days=365)
-    else:
-        return df
+    format_currency_func = get_currency_formatter(region)
+    currency_symbol = get_currency_symbol(region)
     
-    return df[df['DateTime'] >= start_date]
+    # Display total P&L
+    total_pnl = summary.get('total_pnl', 0)
+    pnl_color = "green" if total_pnl > 0 else "red" if total_pnl < 0 else "gray"
+    
+    st.markdown(
+        f"""
+        <div style="text-align: center; margin-bottom: 1.2rem;">
+            <span style="font-size: 2.4rem; font-weight: 800; color: {pnl_color};">
+                {format_currency_func(total_pnl)}
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Display key metrics
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        st.markdown(create_metric_card("Closed P&L", format_currency_func(summary.get('total_closed_pnl', 0)), "#1f77b4"), unsafe_allow_html=True)
+    with col2:
+        st.markdown(create_metric_card("Unrealized P&L", format_currency_func(summary.get('total_unrealized_pnl', 0)), "#ff7f0e"), unsafe_allow_html=True)
+    with col3:
+        st.markdown(create_metric_card("Traded Volume", format_currency_func(summary.get('total_traded_volume', 0)), "#2ca02c"), unsafe_allow_html=True)
+    with col4:
+        st.markdown(create_metric_card("Open Exposure", format_currency_func(summary.get('total_open_exposure', 0)), "#d62728"), unsafe_allow_html=True)
+    with col5:
+        st.markdown(create_metric_card("Open Positions", summary.get('open_positions_count', 0), "#9467bd"), unsafe_allow_html=True)
+    with col6:
+        st.markdown(create_metric_card("Closed Positions", summary.get('closed_positions_count', 0), "#8c564b"), unsafe_allow_html=True)
+    
+    # Show last updated time
+    if not live_pnl_df.empty and 'DateTime' in live_pnl_df.columns:
+        last_datetime = live_pnl_df['DateTime'].iloc[-1]
+        timezone_str = "IST" if region == "INDIA" else "ET"
+        formatted_time = last_datetime.strftime(f'%Y-%m-%d %H:%M:%S {timezone_str}')
+        st.caption(f"📊 Last Updated: {formatted_time}")
+    
+    # Display live P&L chart with compact time range selector
+    if not live_pnl_df.empty:
+        st.divider()
+        
+        # Initialize session state for time range if not exists
+        time_range_key = f'time_range_{region}'
+        if time_range_key not in st.session_state:
+            st.session_state[time_range_key] = "1D"
+        
+        active_range = st.session_state[time_range_key]
+        
+        # Add CSS for compact buttons
+        st.markdown("""
+        <style>
+        /* Make buttons more compact */
+        div[data-testid="column"] .stButton button {
+            padding: 0.2rem 0rem !important;
+            font-size: 0.75rem !important;
+            font-weight: 500 !important;
+            min-height: 28px !important;
+            height: 28px !important;
+            line-height: 1 !important;
+            border-radius: 4px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Create a container for the chart header with inline buttons
+        chart_header = st.container()
+        
+        with chart_header:
+            # Create two rows - first row for title, second for buttons
+            st.markdown("### 📈 P&L Chart")
+            
+            # Create compact button row
+            time_ranges = ["1D", "5D", "1M", "6M", "1Y"]
+            
+            # Use columns with very small gaps
+            button_cols = st.columns([1, 1, 1, 1, 1, 10], gap="small")
+            
+            for idx, tr in enumerate(time_ranges):
+                with button_cols[idx]:
+                    button_type = "primary" if active_range == tr else "secondary"
+                    if st.button(
+                        tr, 
+                        key=f"time_btn_{region}_{tr}", 
+                        type=button_type,
+                        use_container_width=True
+                    ):
+                        st.session_state[time_range_key] = tr
+                        st.rerun()
+        
+        # Create and display chart
+        fig = create_live_pnl_chart(live_pnl_df, currency_symbol, active_range)
+        if fig:
+            st.plotly_chart(fig, use_container_width=True, key=f"pnl_chart_{region}_{active_range}")
+    
+    # Display open positions
+    if not open_df.empty:
+        st.divider()
+        st.subheader("📈 Open Positions")
+        
+        open_display_df = open_df[[
+            'tradingsymbol', 'position_type', 'net_quantity',
+            'avg_price', 'last_price', 'unrealized_pnl', 'open_exposure'
+        ]].copy()
+        
+        open_display_df = open_display_df.rename(columns={
+            'tradingsymbol': 'Symbol',
+            'position_type': 'Position',
+            'net_quantity': 'Quantity',
+            'avg_price': 'Avg Price',
+            'last_price': 'Last Price',
+            'unrealized_pnl': 'Unrealized P&L',
+            'open_exposure': 'Open Exposure'
+        })
+        
+        # Format columns
+        for col in ['Avg Price', 'Last Price', 'Unrealized P&L', 'Open Exposure']:
+            open_display_df[col] = open_display_df[col].apply(format_currency_func)
+        
+        table_html = create_html_table(
+            open_display_df,
+            ['Symbol', 'Position', 'Quantity', 'Avg Price', 'Last Price', 'Unrealized P&L', 'Open Exposure'],
+            currency_symbol
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
+    
+    # Display closed positions
+    if not closed_df.empty:
+        st.divider()
+        st.subheader("📊 Closed Positions (Today)")
+        
+        # Sort by P&L BEFORE any processing
+        closed_df_sorted = closed_df.sort_values(by='pnl', ascending=False)
+        
+        closed_display_df = closed_df_sorted[[
+            'tradingsymbol', 'buy_quantity', 'buy_price',
+            'sell_quantity', 'sell_price', 'pnl'
+        ]].copy()
+        
+        closed_display_df = closed_display_df.rename(columns={
+            'tradingsymbol': 'Symbol',
+            'buy_quantity': 'Buy Qty',
+            'buy_price': 'Buy Price',
+            'sell_quantity': 'Sell Qty',
+            'sell_price': 'Sell Price',
+            'pnl': 'Realized P&L'
+        })
+        
+        # Format columns AFTER sorting
+        for col in ['Buy Price', 'Sell Price', 'Realized P&L']:
+            closed_display_df[col] = closed_display_df[col].apply(format_currency_func)
+        
+        table_html = create_html_table(
+            closed_display_df,
+            ['Symbol', 'Buy Qty', 'Buy Price', 'Sell Qty', 'Sell Price', 'Realized P&L'],
+            currency_symbol
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
