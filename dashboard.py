@@ -670,7 +670,7 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         
         with chart_header:
             # Create two rows - first row for title, second for buttons
-            st.markdown("### 📈 P&L Chart")
+            # st.markdown("### 📈 P&L Chart")
             
             # Create compact button row
             time_ranges = ["1D", "5D", "1M", "6M", "1Y"]
