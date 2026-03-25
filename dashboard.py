@@ -184,6 +184,29 @@ def create_html_table(df, columns, currency_symbol):
 # ===================================================================
 # 📥 Data Loading & Processing
 # ===================================================================
+@st.cache_data(ttl=REFRESH_INTERVAL_SEC)
+def process_all_pnl_data(df_raw):
+    """Process ALL Live PnL data without date filtering"""
+    if df_raw.empty:
+        return pd.DataFrame()
+    
+    df = df_raw.copy()
+    df.columns = df.columns.str.strip()
+    
+    required_cols = ['DateTime', 'Total PnL']
+    if not all(col in df.columns for col in required_cols):
+        return pd.DataFrame()
+    
+    df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
+    df['Total PnL'] = pd.to_numeric(df['Total PnL'], errors='coerce')
+    df = df.dropna(subset=['DateTime', 'Total PnL'])
+    
+    if df.empty:
+        return df
+    
+    df = df.sort_values('DateTime')
+    return df
+
 @st.cache_data(ttl=REFRESH_INTERVAL_SEC, show_spinner=False)
 def load_sheet_data(sheet_gid="0"):
     """Load specific sheet from Google Sheets using gid parameter"""
