@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from news_sentiment_module import NewsSentimentAnalyzer
 
