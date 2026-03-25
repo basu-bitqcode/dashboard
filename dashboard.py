@@ -787,7 +787,16 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
 def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
     """
     Calculate Daily P&L from Live PnL data
-    Returns DataFrame with columns: Date, Gross PnL, Charges, Net PnL, Capital
+    Returns DataFrame with columns: Date, Gross P&L, Charges, Net P&L, Capital
+    
+    Calculation:
+    - Cumulative P&L is tracked over time (starts at 0)
+    - Daily P&L = Today's cumulative P&L - Yesterday's cumulative P&L
+    - Capital = Starting capital + Today's cumulative P&L
+    
+    This correctly handles:
+    - A position that loses today but recovers tomorrow
+    - Shows actual daily MTM changes
     """
     if live_pnl_df.empty:
         return pd.DataFrame()
@@ -801,39 +810,33 @@ def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
     # Extract date
     df['Date'] = df['DateTime'].dt.date
     
-    # Group by date to get daily P&L
-    daily_data = []
-    current_capital = starting_capital
+    # For each date, get the last (end of day) cumulative P&L value
+    daily_end_pnl = df.groupby('Date')['Total PnL'].last().reset_index()
+    daily_end_pnl = daily_end_pnl.sort_values('Date')
     
-    for date, group in df.groupby('Date'):
-        group_sorted = group.sort_values('DateTime')
-        
-        # Get first P&L of the day (start of day)
-        start_pnl = group_sorted.iloc[0]['Total PnL']
-        # Get last P&L of the day (end of day)
-        end_pnl = group_sorted.iloc[-1]['Total PnL']
-        
-        # Daily MTM = End P&L - Start P&L
-        net_pnl = end_pnl
-        
-        # Update capital
-        current_capital += net_pnl
-        
-        daily_data.append({
-            'Date': pd.to_datetime(date),
-            'Gross PnL': net_pnl,
-            'Charges': 0,
-            'Net PnL': net_pnl,
-            'Capital': current_capital
-        })
+    # Calculate daily P&L (MTM) as difference between consecutive days
+    # This shows the actual P&L change for that day
+    daily_end_pnl['Gross P&L'] = daily_end_pnl['Total PnL'].diff()
+    daily_end_pnl['Net P&L'] = daily_end_pnl['Gross P&L']
+    daily_end_pnl['Charges'] = 0
     
-    if not daily_data:
-        return pd.DataFrame()
+    # First day's P&L is just the end P&L (since previous day was 0)
+    daily_end_pnl.loc[daily_end_pnl.index[0], 'Gross P&L'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
+    daily_end_pnl.loc[daily_end_pnl.index[0], 'Net P&L'] = daily_end_pnl.loc[daily_end_pnl.index[0], 'Total PnL']
     
-    daily_df = pd.DataFrame(daily_data)
-    daily_df = daily_df.sort_values('Date', ascending=False)
+    # Calculate capital: starting capital + cumulative P&L
+    daily_end_pnl['Capital'] = starting_capital + daily_end_pnl['Total PnL']
     
-    return daily_df
+    # Prepare final dataframe
+    result_df = daily_end_pnl[['Date', 'Gross P&L', 'Charges', 'Net P&L', 'Capital']].copy()
+    
+    # Convert Date to datetime for consistent formatting
+    result_df['Date'] = pd.to_datetime(result_df['Date'])
+    
+    # Sort by date descending for display (newest first)
+    result_df = result_df.sort_values('Date', ascending=False)
+    
+    return result_df
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
