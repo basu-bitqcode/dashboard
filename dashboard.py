@@ -252,7 +252,7 @@ def process_all_pnl_data(df_raw):
     return df
 
 def filter_data_by_time_range(df, time_range):
-    """Filter dataframe by selected time range"""
+    """Filter dataframe by selected time range using ET timezone"""
     if df.empty:
         return df
     
@@ -261,19 +261,24 @@ def filter_data_by_time_range(df, time_range):
     now_et = datetime.now(et_tz)
     
     if time_range == "1D":
-        start_date = now - timedelta(days=1)
+        start_date = now_et - timedelta(days=1)
     elif time_range == "5D":
-        start_date = now - timedelta(days=5)
+        start_date = now_et - timedelta(days=5)
     elif time_range == "1M":
-        start_date = now - timedelta(days=30)
+        start_date = now_et - timedelta(days=30)
     elif time_range == "6M":
-        start_date = now - timedelta(days=180)
+        start_date = now_et - timedelta(days=180)
     elif time_range == "1Y":
-        start_date = now - timedelta(days=365)
+        start_date = now_et - timedelta(days=365)
     elif time_range == "3Y":
-        start_date = now - timedelta(days=1095)
+        start_date = now_et - timedelta(days=1095)
     else:
         return df
+    
+    # Make sure df['DateTime'] is timezone-aware for comparison
+    if df['DateTime'].dt.tz is None:
+        # If DateTime is naive, localize to ET
+        df['DateTime'] = df['DateTime'].dt.tz_localize(et_tz)
     
     return df[df['DateTime'] >= start_date]
 
