@@ -584,10 +584,55 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
         formatted_time = last_datetime.strftime(f'%Y-%m-%d %H:%M:%S {timezone_str}')
         st.caption(f"📊 Last Updated: {formatted_time}")
     
-    # Display live P&L chart
+    # Display live P&L chart with time range selector
     if not live_pnl_df.empty:
         st.divider()
-        fig = create_live_pnl_chart(live_pnl_df, currency_symbol)
+        
+        # Initialize session state for time range
+        if f'time_range_{region}' not in st.session_state:
+            st.session_state[f'time_range_{region}'] = "1D"
+        
+        # Create inline button row
+        col_btn1, col_btn2, col_btn3, col_btn4, col_btn5, col_btn6, col_spacer = st.columns([1,1,1,1,1,1,10])
+        
+        with col_btn1:
+            if st.button("1D", key=f"btn_1d_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "1D" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "1D"
+                st.rerun()
+        
+        with col_btn2:
+            if st.button("5D", key=f"btn_5d_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "5D" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "5D"
+                st.rerun()
+        
+        with col_btn3:
+            if st.button("1M", key=f"btn_1m_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "1M" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "1M"
+                st.rerun()
+        
+        with col_btn4:
+            if st.button("6M", key=f"btn_6m_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "6M" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "6M"
+                st.rerun()
+        
+        with col_btn5:
+            if st.button("1Y", key=f"btn_1y_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "1Y" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "1Y"
+                st.rerun()
+        
+        with col_btn6:
+            if st.button("3Y", key=f"btn_3y_{region}", type="primary" if st.session_state[f'time_range_{region}'] == "3Y" else "secondary"):
+                st.session_state[f'time_range_{region}'] = "3Y"
+                st.rerun()
+        
+        # Get selected time range
+        selected_range = st.session_state[f'time_range_{region}']
+        
+        # Filter data based on selected time range
+        filtered_pnl_df = filter_data_by_time_range(live_pnl_df, selected_range)
+        
+        # Create chart with filtered data
+        fig = create_live_pnl_chart(filtered_pnl_df, currency_symbol)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
     
@@ -654,6 +699,31 @@ def create_intraday_dashboard(data_dict, live_pnl_df, region="INDIA"):
             currency_symbol
         )
         st.markdown(table_html, unsafe_allow_html=True)
+
+
+def filter_data_by_time_range(df, time_range):
+    """Filter dataframe by selected time range"""
+    if df.empty:
+        return df
+    
+    now = datetime.now()
+    
+    if time_range == "1D":
+        start_date = now - timedelta(days=1)
+    elif time_range == "5D":
+        start_date = now - timedelta(days=5)
+    elif time_range == "1M":
+        start_date = now - timedelta(days=30)
+    elif time_range == "6M":
+        start_date = now - timedelta(days=180)
+    elif time_range == "1Y":
+        start_date = now - timedelta(days=365)
+    elif time_range == "3Y":
+        start_date = now - timedelta(days=1095)
+    else:
+        return df
+    
+    return df[df['DateTime'] >= start_date]
 
 def create_daily_pnl_chart(daily_pnl_df, currency_symbol):
     """Create IMPROVED daily P&L chart with Capital line showing high/low - MATCHING INTRA STYLE"""
@@ -981,10 +1051,13 @@ df_india_daily_pnl_raw = load_sheet_data(sheet_gid="795838620")
 
 df_india_daily_sheet2_raw = load_sheet_data(sheet_gid="1229613596")    # NEW TAB
 
+# Load ALL historical data for GLOBAL intraday
+df_global_all_pnl_raw = load_sheet_data(sheet_gid="1297846329")
+global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)  # Use this for the chart
 
-df_global_raw = load_sheet_data(sheet_gid="94252270")
-df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
-df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
+# df_global_raw = load_sheet_data(sheet_gid="94252270")
+# df_global_live_pnl_raw = load_sheet_data(sheet_gid="1297846329")
+# df_global_daily_pnl_raw = load_sheet_data(sheet_gid="563240267")
 
 # Process data
 india_data = process_india_data(df_india_raw)
@@ -1014,12 +1087,11 @@ tab1, tab2 = st.tabs([
 ])
 
 with tab1:
-    # Add refresh button at top-right
     col1, col2 = st.columns([5, 1])
     with col2:
         create_refresh_button("global_intra")
     
-    create_intraday_dashboard(global_data, global_live_pnl_data, region="GLOBAL")
+    create_intraday_dashboard(global_data, global_all_pnl_data, region="GLOBAL")
 
 with tab2:
     col1, col2 = st.columns([5, 1])
