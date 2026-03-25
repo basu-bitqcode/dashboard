@@ -814,7 +814,7 @@ def calculate_daily_pnl_from_live(live_pnl_df, starting_capital=100000):
         end_pnl = group_sorted.iloc[-1]['Total PnL']
         
         # Daily MTM = End P&L - Start P&L
-        net_pnl = end_pnl - start_pnl
+        net_pnl = end_pnl
         
         # Update capital
         current_capital += net_pnl
