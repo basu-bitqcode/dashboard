@@ -1208,4 +1208,4 @@ with tab2:
     with col2:
         create_refresh_button("global_daily")
     
-    create_daily_pnl_dashboard(global_daily_pnl_calculated, region="GLOBAL")
+    create_daily_pnl_dashboard(df_global_daily_pnl_raw, region="GLOBAL")
