@@ -1176,12 +1176,16 @@ global_all_pnl_data = process_all_pnl_data(df_global_all_pnl_raw)
 STARTING_CAPITAL = 40000  # Starting capital in USD
 global_daily_pnl_calculated = calculate_daily_pnl_from_live(global_all_pnl_data, STARTING_CAPITAL)
 
-# Process data
+# ===================================================================
+# 📊 Process data (Updated for Global Daily)
+# ===================================================================
 india_data = process_india_data(df_india_raw)
 india_live_pnl_data = process_live_pnl_data(df_india_live_pnl_raw)
 india_daily_pnl_data = process_daily_pnl_data(df_india_daily_pnl_raw, region="INDIA")
-
 india_daily_sheet2_data = process_daily_pnl_data(df_india_daily_sheet2_raw, region="INDIA")
+
+# NEW: Process Global Daily just like India Daily
+global_daily_pnl_data = process_daily_pnl_data(df_global_daily_pnl_raw, region="GLOBAL")
 
 global_data = process_india_data(df_global_raw) if not df_global_raw.empty else {
     'open_positions': pd.DataFrame(), 'closed_positions': pd.DataFrame(), 'summary': {}
@@ -1208,4 +1212,5 @@ with tab2:
     with col2:
         create_refresh_button("global_daily")
     
-    create_daily_pnl_dashboard(df_global_daily_pnl_raw, region="GLOBAL")
+    # Pass the processed data instead of the raw dataframe
+    create_daily_pnl_dashboard(global_daily_pnl_data, region="GLOBAL")
